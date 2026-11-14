@@ -65,7 +65,7 @@ const Game = (() => {
     running = true; paused = false; resize(); last = performance.now();
     raf = requestAnimationFrame(frame);
   }
-  function stop() { running = false; cancelAnimationFrame(raf); }
+  function stop() { running = false; cancelAnimationFrame(raf); Input.setExpected(null); }
   function pause(p) { paused = p === undefined ? !paused : p; return paused; }
   function setTempo(m) { opts.tempo = m; spb = 60 / (song.bpm * m); }
 
@@ -109,6 +109,15 @@ const Game = (() => {
     }
     while (p0 < notes.length && notes[p0].state) p0++;
     t = nt;
+    // מודיעים למנוע ההאזנה לאילו תווים מצפים עכשיו
+    if (Input.micOn && mode !== 'listen') {
+      const exp = [], nx = nextMine();
+      if (nx) {
+        const lim = mode === 'wait' ? ((nx.start - t) * spb <= 0.6 ? nx.start + 0.06 : -1e9) : tj + 0.5 / spb;
+        for (let i = p0; i < notes.length && notes[i].start <= lim; i++) if (notes[i].mine && !notes[i].state) exp.push(notes[i].midi);
+      }
+      Input.setExpected(exp);
+    }
     if (mode !== 'record' && p0 >= notes.length && t >= endAt) finish();
   }
 

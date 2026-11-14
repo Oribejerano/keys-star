@@ -37,10 +37,14 @@ const Chords = (() => {
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); kb.layout(0, 0, W, H);
   }
   function show() { active = true; resize(); ui(); cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); }
-  function hide() { active = false; cancelAnimationFrame(raf); if (game) endGame(true); }
+  function hide() { if (active) Input.setExpected(null); active = false; cancelAnimationFrame(raf); if (game) endGame(true); }
   function playCur() { Snd.unlock(); notesFor(cur, inv).forEach((m, i) => setTimeout(() => Snd.note(m, 1.2, 0.6), i * 40)); }
 
   function ui() {
+    // מנוע ההאזנה מצפה לצלילי האקורד הנוכחי בכל האוקטבות
+    const cc = Music.parseChord(cur), exp = [];
+    for (let m = 40; m <= 84; m++) if (cc.iv.some(i => (cc.root + i) % 12 === m % 12)) exp.push(m);
+    Input.setExpected(exp);
     $('chName').textContent = cur;
     $('chHeb').textContent = Music.chordHeb(cur, style());
     const hideNotes = game && performance.now() - game.since < 4000;

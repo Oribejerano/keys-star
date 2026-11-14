@@ -163,7 +163,7 @@
   $('sgDelete').onclick = () => { if (confirm('למחוק את השיר?')) { D.mine = D.mine.filter(s => s !== curSong); delete D.prog[curSong.id]; Store.save(); go('home'); } };
   document.querySelector('#scr-song .modes').addEventListener('click', async e => {
     const b = e.target.closest('[data-mode]'); if (!b) return;
-    Snd.unlock(); await ensureMic();
+    goFull(); Snd.unlock(); await ensureMic();
     const m = b.dataset.mode;
     if (m === 'smart') {
       const B = Music.build(curSong, arr), secs = [];
@@ -263,9 +263,8 @@
       `<div class="set"><div class="r"><span>שמות התווים</span><select data-k="names"><option value="sol">דו רה מי</option><option value="letters">C D E</option></select></div></div>` +
       chk('mic', '🎤 האזנה לפסנתר במיקרופון', 'האפליקציה שומעת את הנגינה ובודקת אותה. שימי את המכשיר קרוב לרמקול של האורגנית.') +
       `<div class="set"><div id="micNote">—</div><div class="meter"><i id="micLvl"></i></div>
-        <div class="r"><span>רגישות</span><input type="range" data-k="sens" min="0" max="100" value="${CFG.sens}"></div>
         <div class="r"><span>פיצוי השהיה</span><input type="range" data-k="latency" min="0" max="300" step="10" value="${CFG.latency}"></div>
-        <small>בדיקה: נגני תו אחד — השם שלו אמור להופיע למעלה. אם לא מזהה, העלי רגישות; אם מזהה רעשים, הורידי.</small></div>` +
+        <small>בדיקה: נגני תו אחד — השם שלו אמור להופיע למעלה. דיבור ורעשי רקע לא אמורים להופיע.</small></div>` +
       `<div class="set"><div class="r"><span>🎹 חיבור MIDI</span><b>${Input.midi.ok ? esc(Input.midi.devices.join(', ')) : navigator.requestMIDIAccess ? 'לא מחובר' : 'לא נתמך בדפדפן הזה'}</b></div><small>חיבור האורגנית בכבל USB נותן את הזיהוי המדויק ביותר (נתמך בכרום במחשב ובאנדרואיד).</small></div>` +
       chk('backing', 'ליווי אוטומטי', 'האפליקציה מנגנת את היד שאת לא מנגנת. כבוי אוטומטית כשהמיקרופון פעיל.') +
       chk('metro', 'מטרונום') + chk('staff', 'הצגת חמשה עם תווים') +
@@ -291,6 +290,23 @@
     if (k === 'mic') { Snd.unlock(); if (CFG.mic) await ensureMic(); else Input.stopMic(); }
     if (k === 'names') renderSettings();
   });
+
+  // ---------- מסך מלא ----------
+  const fsEl = document.documentElement;
+  const inFs = () => document.fullscreenElement || document.webkitFullscreenElement;
+  const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  function goFull() {
+    if (inFs() || standalone()) return true;
+    const rq = fsEl.requestFullscreen || fsEl.webkitRequestFullscreen;
+    if (!rq) return false;
+    try { const r = rq.call(fsEl, { navigationUI: 'hide' }); if (r && r.catch) r.catch(() => {}); } catch (e) { return false; }
+    return true;
+  }
+  $('fsBtn').onclick = () => {
+    if (inFs()) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+    if (!goFull()) toast('במכשיר הזה: "שיתוף" ← "הוסף למסך הבית", ואז האפליקציה נפתחת במסך מלא', 4500);
+  };
+  if (standalone()) $('fsBtn').hidden = true;
 
   // ---------- אתחול ----------
   Game.init($('gameCv'));

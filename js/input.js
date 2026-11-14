@@ -38,13 +38,8 @@ const Input = (() => {
     }).catch(() => {});
   }
 
-  // ---- מיקרופון ----
-  const LO = 36, HI = 96, HN = 5;
-  const F = new Float32Array(130); for (let n = 0; n < 130; n++) F[n] = 440 * Math.pow(2, (n - 69) / 12);
-  const E = new Float32Array(130), H1 = new Float32Array(130), H2 = new Float32Array(130);
-  const hist = new Float32Array(130 * HN), lastOn = new Float64Array(130), gone = new Uint8Array(130), seen = new Uint8Array(130), pend = new Uint8Array(130), since = new Float64Array(130);
-  let an = null, db = null, td = null, mag = null, stream = null, srcNode = null, raf = 0, hi = 0;
-  let rmsSlow = 0, attackT = -1e9;
+  // ---- מיקרופון ---- (הזיהוי עצמו ב-detector.js)
+  let an = null, td = null, det = null, stream = null, srcNode = null, timer = 0, expected = null;
   const mic = { on: false, level: 0, notes: [], error: '' };
 
   async function startMic(testNode) {
@@ -53,77 +48,35 @@ const Input = (() => {
     try {
       if (testNode) srcNode = testNode;
       else {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+        // בלי עיבודי "שיחת טלפון" (ביטול הד, הנמכת רעש, הגבר אוטומטי) — הם מעוותים צלילי פסנתר
+        stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
         srcNode = ac.createMediaStreamSource(stream);
       }
     } catch (e) { mic.error = 'אין גישה למיקרופון'; return false; }
-    an = ac.createAnalyser(); an.fftSize = 8192; an.smoothingTimeConstant = 0;
+    det = new Detector(ac.sampleRate);
+    an = ac.createAnalyser(); an.fftSize = det.N; an.smoothingTimeConstant = 0;
     srcNode.connect(an);
-    db = new Float32Array(an.frequencyBinCount); td = new Float32Array(an.fftSize); mag = new Float32Array(an.frequencyBinCount);
-    hist.fill(0); lastOn.fill(-1e9); gone.fill(0);
+    td = new Float32Array(det.N);
     mic.on = true; mic.error = '';
-    raf = setInterval(() => { if (mic.on) analyze(performance.now()); }, 16);
+    timer = setInterval(tick, 20);
     return true;
   }
   function stopMic() {
-    mic.on = false; clearInterval(raf);
+    mic.on = false; clearInterval(timer);
     try { srcNode && srcNode.disconnect(an); } catch (e) { /* כבר מנותק */ }
     if (stream) stream.getTracks().forEach(t => t.stop());
     stream = null; srcNode = null; mic.notes = []; mic.level = 0;
     for (const [m, v] of [...held]) if (v.src === 'mic') emit('off', m, 'mic');
   }
-
-  function analyze(now) {
-    const ac = Snd.ctx();
+  function tick() {
+    if (!mic.on) return;
     an.getFloatTimeDomainData(td);
-    let s = 0; for (let i = td.length - 1024; i < td.length; i++) s += td[i] * td[i];
-    const rms = Math.sqrt(s / 1024); mic.level = rms;
-    if (rms > 1.6 * rmsSlow && rms > 0.004) attackT = now;
-    rmsSlow = rmsSlow * 0.85 + rms * 0.15;
-
-    an.getFloatFrequencyData(db);
-    const res = ac.sampleRate / an.fftSize, maxBin = Math.min(db.length - 1, Math.ceil(7000 / res));
-    let sum = 0, cnt = 0;
-    for (let i = 0; i <= maxBin; i++) { const v = Math.pow(10, db[i] / 20); mag[i] = v; if (i * res > 80) { sum += v; cnt++; } }
-    const mean = sum / cnt;
-    const pk = f => {
-      const b = f / res, lo = Math.round(b * 0.975), up = Math.min(maxBin, Math.round(b * 1.025));
-      let m = 0; for (let i = lo; i <= up; i++) if (mag[i] > m) m = mag[i];
-      return m;
-    };
-    let maxE = 0;
-    for (let n = LO - 1; n <= HI + 1; n++) {
-      const f = F[n], h1 = pk(f), h2 = pk(2 * f), h3 = pk(3 * f);
-      H1[n] = h1; H2[n] = h2; E[n] = h1 + 0.7 * h2 + 0.5 * h3;
-      if (E[n] > maxE) maxE = E[n];
-    }
-    const thr = Math.max(mean * 10, Math.pow(10, (-75 + (100 - CFG.sens) * 0.4) / 20));
-    const present = [];
-    for (let n = LO; n <= HI; n++) {
-      const e = E[n];
-      const ok = e > thr && e >= 0.18 * maxE && H1[n] > mean * 5 && H1[n] >= 0.1 * H2[n] &&
-        H1[n] >= H1[n - 1] && H1[n] >= H1[n + 1] && e >= E[n - 1] && e >= E[n + 1];
-      if (ok) {
-        let ghost = false;
-        for (const p of present) { const d = n - p; if ((d === 12 || d === 19 || d === 24 || d === 28 || d === 31) && H1[p] >= 0.25 * H1[n]) { ghost = true; break; } }
-        present.push(n); gone[n] = 0;
-        let mn = Infinity; for (let k = 0; k < HN; k++) mn = Math.min(mn, hist[n * HN + k]);
-        const fresh = now - lastOn[n] > 220;
-        const attack = now - attackT < 140 && lastOn[n] < attackT - 30;
-        if (fresh && (e > 1.45 * mn + thr * 0.2 || (attack && e > 1.2 * mn))) pend[n] = 1;
-        // תו נחשב רק אחרי שהוא יציב כ-40 אלפיות שנייה — מסנן רעשי התקפה וקפיצות בין תווים שכנים
-        if (!seen[n]) since[n] = now;
-        if ((seen[n] = Math.min(200, seen[n] + 1)) >= 2 && now - since[n] >= 40 && pend[n]) { pend[n] = 0; lastOn[n] = now; emit('on', n, 'mic', ghost); }
-        else if (held.has(n) && held.get(n).src === 'mic') held.get(n).ghost = ghost;
-      } else {
-        seen[n] = 0; pend[n] = 0;
-        if (held.has(n) && held.get(n).src === 'mic' && ++gone[n] > 4) emit('off', n, 'mic');
-      }
-      hist[n * HN + hi] = e;
-    }
-    hi = (hi + 1) % HN;
-    mic.notes = present;
+    const evs = det.process(td, performance.now(), expected);
+    mic.level = det.level; mic.notes = det.present;
+    for (const e of evs) emit(e.type, e.midi, 'mic', !!e.ghost);
   }
+  // המשחק מודיע לאילו תווים הוא מצפה עכשיו; הם מזוהים בסף רגיש יותר
+  function setExpected(list) { expected = list && list.length ? new Set(list) : null; }
 
-  return { on, emit, touch, heldNotes, initMIDI, midi, startMic, stopMic, mic, get micOn() { return mic.on; } };
+  return { on, emit, touch, heldNotes, initMIDI, midi, startMic, stopMic, setExpected, mic, get micOn() { return mic.on; } };
 })();
