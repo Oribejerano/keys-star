@@ -1,5 +1,5 @@
-// ספריית שירים במכשיר: "חבילת שירים" (קובץ .ksp שנבנה מתיקיית MIDI עם tools/build-pack.js) נטענת פעם אחת
-// ונשמרת במסד הנתונים של הדפדפן (IndexedDB) — יש בו מקום לאלפי שירים, בניגוד לאחסון הרגיל (כ-5MB).
+// ספריית השירים: חבילת השירים של האפליקציה (songs/keys-star-songs.ksp, נבנית עם tools/build-pack.js) נטענת לבד
+// בפתיחה הראשונה (ושוב רק כשהחבילה מתעדכנת), ונשמרת במסד הנתונים של הדפדפן (IndexedDB) — יש בו מקום לאלפי שירים, בניגוד לאחסון הרגיל (כ-5MB).
 // ברשימה נשמרים רק הפרטים (שם, אמן, קטגוריה, רמה); התווים עצמם נטענים רק כשפותחים שיר.
 const Library = (() => {
   let list = [], dbp = null;
@@ -21,7 +21,7 @@ const Library = (() => {
     .catch(() => (list = []));
 
   // טעינת קובץ החבילה (דחוס ב-gzip). onProgress(שלב, אחוז)
-  async function importPack(file, onProgress) {
+  async function importPack(file, onProgress, ver) {
     const prog = onProgress || (() => {});
     prog('קוראת את הקובץ…', 0);
     let bytes = new Uint8Array(await file.arrayBuffer());
@@ -42,7 +42,7 @@ const Library = (() => {
       for (const s of part) entries.push(toEntry(s));
       prog(`שומרת שירים… ${Math.min(songs.length, i + 400)} / ${songs.length}`, 10 + 90 * Math.min(1, (i + 400) / songs.length));
     }
-    await tx(['meta'], 'readwrite', m => m.put({ songs: entries, made: pack.made, at: Date.now() }, 'index'));
+    await tx(['meta'], 'readwrite', m => m.put({ songs: entries, made: pack.made, at: Date.now(), v: ver || '' }, 'index'));
     list = entries;
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
     return entries.length;
@@ -57,6 +57,21 @@ const Library = (() => {
     entry.raw = raw; if (rec.y) entry.lyrics = rec.y;
     return entry;
   }
+  // טוען את חבילת השירים של האפליקציה אם עוד לא נטענה במכשיר הזה, או אם יצאה גרסה חדשה שלה
+  let syncing = null;
+  function sync(onProgress, force) {
+    if (syncing) return syncing;
+    syncing = (async () => {
+      await ready;
+      const info = await (await fetch('songs/pack-info.json?t=' + Date.now(), { cache: 'no-store' })).json();
+      const cur = await tx(['meta'], 'readonly', m => m.get('index'));
+      if (!force && cur && cur.v === info.v && list.length) return 0;
+      const r = await fetch('songs/keys-star-songs.ksp?v=' + info.v);
+      if (!r.ok) throw new Error('הורדת השירים נכשלה');
+      return importPack(await r.blob(), onProgress, info.v);
+    })().finally(() => { syncing = null; });
+    return syncing;
+  }
   async function clear() { await tx(['meta', 'notes'], 'readwrite', (m, n) => { m.clear(); n.clear(); }); list = []; }
-  return { ready, importPack, load, clear, get list() { return list; } };
+  return { ready, importPack, sync, load, clear, get list() { return list; } };
 })();

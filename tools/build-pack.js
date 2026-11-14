@@ -1,11 +1,11 @@
 // בונה "חבילת שירים" פרטית מתיקיית קובצי MIDI: כל הקבצים נקראים, מצומצמים למנגינה + בס, ממוינים לקטגוריות
-// ונארזים לקובץ דחוס אחד. את הקובץ מעבירים לאייפד/טלפון וטוענים מההגדרות ("להורים" ← "חבילת שירים").
-// החבילה לא עולה לאתר — היא נשמרת רק במכשיר שאליו נטענה.
-// הרצה: node tools/build-pack.js [תיקיית MIDI] [קובץ פלט]   (ברירת מחדל: MIDI → MIDI/keys-star-songs.ksp)
+// ונארזים לקובץ דחוס אחד בתוך האפליקציה (songs/). האפליקציה טוענת אותו לבד בפתיחה הראשונה (ושוב כשהחבילה מתעדכנת).
+// הרצה: node tools/build-pack.js [תיקיית MIDI] [תיקיית פלט]   (ברירת מחדל: MIDI → songs/)
+// אחרי בנייה מחדש: commit + push — וכל המכשירים יקבלו את השירים החדשים.
 const fs = require('fs'), path = require('path'), zlib = require('zlib');
 const MidiFile = require('../js/midifile.js');
 const root = path.join(__dirname, '..');
-const dir = process.argv[2] || path.join(root, 'MIDI'), out = process.argv[3] || path.join(dir, 'keys-star-songs.ksp');
+const dir = process.argv[2] || path.join(root, 'MIDI'), outDir = process.argv[3] || path.join(root, 'songs'), out = path.join(outDir, 'keys-star-songs.ksp');
 
 const HEB = /[֐-׿]/;
 const CLASSIC = /\b(bach|mozart|beethoven|chopin|tchaikovsky|tschaikowsky|vivaldi|debussy|schubert|handel|haendel|haydn|brahms|liszt|grieg|satie|pachelbel|albinoni|bizet|verdi|rossini|strauss|mendelssohn|schumann|dvorak|rachmaninov|rachmaninoff|ravel|saint-sa[eë]ns|offenbach|scott joplin|clementi|czerny|paganini|elgar|holst|mussorgsky|puccini|wagner|boccherini|corelli|scarlatti|purcell|telemann|faure|massenet|delibes|borodin|rimsky|khachaturian|gershwin|sibelius|smetana|weber|gounod|ponchielli|von suppe|suppe|lully|monti)\b/i;
@@ -62,7 +62,10 @@ for (const f of files) {
 }
 const json = JSON.stringify({ app: 'keys-star-pack', v: 1, made: new Date().toISOString(), songs });
 const gz = zlib.gzipSync(json, { level: 9 });
+fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(out, gz);
+const ver = require('crypto').createHash('md5').update(gz).digest('hex').slice(0, 10);
+fs.writeFileSync(path.join(outDir, 'pack-info.json'), JSON.stringify({ v: ver, n: songs.length, made: new Date().toISOString() }) + '\n');
 console.log(`${files.length} קבצים → ${stat.ok} שירים (${stat.dup} כפולים, ${stat.bad} לא נקראו, ${stat.tiny} בלי מנגינה, ${stat.cut} נחתכו)`);
 console.log('קטגוריות:', JSON.stringify(cats));
 console.log(`גודל: ${(json.length / 1048576).toFixed(1)}MB → דחוס ${(gz.length / 1048576).toFixed(1)}MB · ${out}`);

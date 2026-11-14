@@ -334,3 +334,5 @@ input[type=range] { width: 100%; accent-color: var(--acc); height: 32px; }
 .card.add.more b { color: var(--acc); }
 
 .ver { color: var(--muted); font-size: 12px; text-align: center; margin: 18px 0 6px; direction: ltr; }
+.daily.loading { background: linear-gradient(120deg, #a78bfa, #60a5fa); }
+.daily.loading .spin { border-color: rgba(255,255,255,.35); border-top-color: #fff; width: 22px; height: 22px; }

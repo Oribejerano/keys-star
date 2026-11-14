@@ -107,6 +107,7 @@
     let top = '';
     const last = D.last && songsAll.find(s => s.id === D.last);
     if (last) top += `<button class="daily cont" data-song="${last.id}"><i>▶️</i><div><b dir="auto">להמשיך: ${esc(last.title)}</b><span>${starsOf(last.id) ? 'יש לך כבר ' + starsOf(last.id) + ' ⭐ — אפשר להשיג עוד!' : 'בואי נמשיך לתרגל'}</span></div><span class="go">▶</span></button>`;
+    if (packMsg) top += `<div class="daily loading"><i><span class="spin"></span></i><div><b>מכינה לך אלפי שירים…</b><span id="packMsg">${packMsg}</span></div></div>`;
     top += challengeHtml();
     top += `<button class="daily surprise" id="surprise"><i>🎲</i><div><b>הפתיעי אותי!</b><span>שיר אקראי מתוך ${songsAll.length.toLocaleString('he-IL')} שירים</span></div><span class="go">▶</span></button>`;
     $('daily').innerHTML = top;
@@ -148,7 +149,22 @@
     if (e.target.closest('[data-midi]')) $('midiFile').click();
   });
   window.addEventListener('keys:chords', e => { const c = challenge(); if (c.type === 'chords' && e.detail >= c.need) challengeDone(); });
-  Library.ready.then(() => { if ($('scr-home').classList.contains('on')) renderHome(); });
+  // טעינה אוטומטית של כל השירים (בפעם הראשונה, או כשהחבילה מתעדכנת)
+  let packMsg = '';
+  function syncSongs(force) {
+    return Library.sync((msg) => {
+      const first = !packMsg; packMsg = msg;
+      if (first && $('scr-home').classList.contains('on')) renderHome();
+      const el = $('packMsg'); if (el) el.textContent = msg;
+      const pi = $('packInfo'); if (pi) pi.textContent = '⏳ ' + msg;
+    }, force).then(n => {
+      packMsg = '';
+      if (n) toast(`🎉 נוספו ${n.toLocaleString('he-IL')} שירים!`, 2600);
+      if ($('scr-home').classList.contains('on')) renderHome();
+      if ($('scr-settings').classList.contains('on')) renderSettings();
+    }).catch(() => { packMsg = ''; if ($('scr-home').classList.contains('on')) renderHome(); });
+  }
+  Library.ready.then(() => { if ($('scr-home').classList.contains('on')) renderHome(); syncSongs(false); });
   $('askInput').addEventListener('input', e => { query = e.target.value.trim(); renderHome(); });
   $('askInput').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
 
@@ -412,9 +428,8 @@
       `<h3 class="sec">👨‍👩‍👧 להורים</h3>` +
       `<div class="set"><div class="r"><span>🎙️ הקלטות לכיוונון</span><button class="btn ghost" data-go="samples">פתיחה</button></div>
         <small id="sampleInfo">מקליטים את האורגנית האמיתית (קלידים, אקורדים, רעשי רקע), שומרים ושולחים — כדי לכוונן את ההאזנה בדיוק אליה.</small></div>` +
-      `<div class="set"><div class="r"><span>📦 חבילת שירים</span><button class="btn ghost" id="setPack">טעינת חבילה</button></div>
-        <small id="packInfo">${Library.list.length ? `במכשיר יש ${Library.list.length.toLocaleString('he-IL')} שירים מהחבילה.` : 'את הקובץ keys-star-songs.ksp מעבירים למכשיר (במייל, בדרייב או בוואטסאפ לעצמך), שומרים ב"קבצים", ולוחצים כאן "טעינת חבילה".'}</small>
-        ${Library.list.length ? '<button class="link danger" id="setPackDel">מחיקת החבילה מהמכשיר</button>' : ''}</div>` +
+      `<div class="set"><div class="r"><span>📚 ספריית השירים</span><button class="btn ghost" id="setPack">רענון</button></div>
+        <small id="packInfo">${Library.list.length ? `במכשיר יש ${Library.list.length.toLocaleString('he-IL')} שירים מהספרייה. הם נטענים לבד, ומתעדכנים לבד כשנוספים שירים.` : 'השירים נטענים לבד בפעם הראשונה שפותחים את האפליקציה (צריך אינטרנט).'}</small></div>` +
       `<div class="set"><div class="r"><span>📂 הוספת שירים מקובצי MIDI</span><button class="btn ghost" id="setMidi">בחירת קבצים</button></div><small>אפשר לבחור הרבה קבצים בבת אחת. הם נשמרים רק במכשיר הזה, בקטגוריה "השירים שלי".</small></div>` +
       `<div class="set"><div class="r"><span>פיצוי השהיה (מתכוונן לבד)</span><b>${CFG.latency} אלפיות שנייה</b></div>
         <input type="range" data-k="latency" min="0" max="300" step="10" value="${CFG.latency}">
@@ -425,8 +440,7 @@
       `<div class="ver">גרסה ${BUILD}</div>`;
     $('setBody').querySelector('[data-k=names]').value = CFG.names;
     $('setReset').onclick = () => { if (confirm('לאפס כוכבים, ניקוד ורצף? (השירים שהוספת יישארו)')) { D.prog = {}; D.xp = 0; D.streak = { last: '', n: 0 }; D.chordBest = 0; Store.save(); toast('אופס'); } };
-    $('setPack').onclick = () => $('packFile').click();
-    if ($('setPackDel')) $('setPackDel').onclick = async () => { if (!confirm('למחוק את כל שירי החבילה מהמכשיר? (הכוכבים נשמרים)')) return; await Library.clear(); toast('החבילה נמחקה', 1500); renderSettings(); };
+    $('setPack').onclick = () => { $('packInfo').textContent = '⏳ בודקת…'; syncSongs(true); };
     $('setMidi').onclick = () => $('midiFile').click();
     Samples.count().then(n => { const el = $('sampleInfo'); if (el && n) el.textContent = n === 1 ? 'הקלטה אחת שמורה במכשיר.' : `${n} הקלטות שמורות במכשיר.`; }).catch(() => {});
     ensureMic();
@@ -446,17 +460,6 @@
     Store.save();
     if (k === 'mic') { Snd.unlock(); if (CFG.mic) await ensureMic(); else Input.stopMic(); }
     if (k === 'names') renderSettings();
-  });
-
-  // ---------- חבילת שירים ----------
-  $('packFile').addEventListener('change', async e => {
-    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
-    const info = () => $('packInfo');
-    try {
-      const n = await Library.importPack(f, (msg) => { if (info()) info().textContent = '⏳ ' + msg; });
-      Snd.chime(true); toast(`נוספו ${n.toLocaleString('he-IL')} שירים! 🎉`, 2600);
-      renderSettings();
-    } catch (err) { toast(err.message || 'הטעינה נכשלה', 3500); renderSettings(); }
   });
 
   // ---------- מסך מלא ----------
@@ -484,7 +487,7 @@
   // ---------- עדכון אוטומטי ----------
   // דף שנשמר במטמון (או אפליקציה שהוצמדה למסך הבית) לא תמיד נטען מחדש לבד. בכל פתיחה, ובכל חזרה למסך,
   // בודקים אם יש גרסה חדשה באתר — ואם כן, טוענים אותה (רק כשלא באמצע שיר).
-  const BUILD = '20261114i';
+  const BUILD = '20261114j';
   async function checkUpdate() {
     try {
       const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
