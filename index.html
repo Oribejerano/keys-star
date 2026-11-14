@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b1023">
+<title>כוכבת הקלידים</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <section id="scr-home" class="scr on">
+    <header class="top">
+      <div class="brand">🎹 כוכבת הקלידים</div>
+      <div class="stats"><span id="stStreak"></span><span id="stStars"></span><span id="stLvl"></span></div>
+    </header>
+    <div class="xpbar"><i id="xpFill"></i></div>
+    <div class="scroll">
+      <div id="daily"></div>
+      <form id="askForm" class="ask">
+        <input id="askInput" type="text" placeholder="🔍 איזה שיר בא לך לנגן?" autocomplete="off">
+        <button class="btn" type="submit">הוסיפי</button>
+      </form>
+      <div id="catChips" class="chips scrollx"></div>
+      <div id="songList"></div>
+    </div>
+  </section>
+
+  <section id="scr-add" class="scr">
+    <header class="top"><button class="icon" data-go="home">→</button><div class="brand" id="adTitle"></div></header>
+    <div class="scroll pad">
+      <div class="sub" id="adArtist"></div>
+      <div class="tip">השיר הזה עוד לא באפליקציה. מוסיפים אותו פעם אחת — ואז אפשר לתרגל אותו בכל המצבים, עם ניקוד וכוכבים.</div>
+      <h3>שלב 1 · לומדים את השיר</h3>
+      <button id="adYt" class="btn ghost wide">▶ שיעור פסנתר ביוטיוב</button>
+      <h3>שלב 2 · מכניסים אותו לאפליקציה</h3>
+      <div class="modes">
+        <button class="mode hot" id="adRec"><b>⏺ הקלטה</b><span>נגני את השיר (אפשר יחד עם היוטיוב) והאפליקציה תשמור את התווים</span></button>
+        <button class="mode" id="adMidi"><b>📂 קובץ MIDI</b><span>יש קובץ ‎.mid של השיר? טוענים אותו</span></button>
+      </div>
+      <button id="adRemove" class="link danger" hidden>הסרה מהרשימה</button>
+    </div>
+  </section>
+
+  <section id="scr-song" class="scr">
+    <header class="top"><button class="icon" data-go="home">→</button><div class="brand" id="sgTitle"></div><div id="sgStars" class="stats"></div></header>
+    <div class="scroll pad">
+      <div class="sub" id="sgComposer"></div>
+      <h3>מה מנגנים?</h3>
+      <div id="sgArr" class="chips"></div>
+      <h3>מהירות: <b id="sgTempoVal">100%</b></h3>
+      <input type="range" id="sgTempo" min="50" max="120" step="5" value="100">
+      <h3>איך מתרגלים?</h3>
+      <div class="modes">
+        <button class="mode" data-mode="listen"><b>👂 האזנה</b><span>רואים ושומעים את השיר</span></button>
+        <button class="mode" data-mode="wait"><b>🐢 לימוד</b><span>השיר מחכה לך בכל תו ומתקן טעויות</span></button>
+        <button class="mode hot" data-mode="smart"><b>🎯 אימון חכם</b><span>חלק אחרי חלק, מלאט למהיר</span></button>
+        <button class="mode" data-mode="play"><b>🎮 נגינה</b><span>בקצב, עם ניקוד, רצף וכוכבים</span></button>
+      </div>
+      <button id="sgDelete" class="link danger" hidden>מחיקת השיר</button>
+    </div>
+  </section>
+
+  <section id="scr-game" class="scr">
+    <div class="hud">
+      <button class="icon" id="gExit">✕</button>
+      <button class="icon" id="gPause">⏸</button>
+      <button class="icon" id="gSlow">🐢</button>
+      <span id="gTempo" class="pill">100%</span>
+      <button class="icon" id="gFast">🐇</button>
+      <span id="hudChord" class="pill chord"></span>
+      <span class="grow"></span>
+      <span id="hudBanner" class="pill"></span>
+      <span id="hudCombo"></span>
+      <span class="pill score">⭐ <b id="hudScore">0</b></span>
+      <span id="gSrc" class="pill"></span>
+    </div>
+    <div class="prog"><i id="hudProg"></i></div>
+    <div class="stage">
+      <canvas id="gameCv"></canvas>
+      <div id="hudMsg"></div>
+    </div>
+  </section>
+
+  <section id="scr-result" class="scr">
+    <div class="scroll pad center">
+      <div id="rsStars" class="bigstars"></div>
+      <h1 id="rsTitle"></h1>
+      <div id="rsAcc" class="acc"></div>
+      <div id="rsGrid" class="rgrid"></div>
+      <div id="rsTip" class="tip"></div>
+      <div class="btns">
+        <button id="rsWeak" class="btn hot" hidden></button>
+        <button id="rsAgain" class="btn">🔁 שוב</button>
+        <button id="rsBack" class="btn ghost">חזרה לשיר</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="scr-chords" class="scr">
+    <header class="top"><div class="brand">🎼 אקורדים</div><div class="stats"><span id="chInfo"></span></div></header>
+    <div class="scroll pad">
+      <div class="chcard">
+        <div id="chName">C</div>
+        <div id="chHeb"></div>
+        <div id="chNotes"></div>
+        <div class="btns row">
+          <button id="chPlay" class="btn ghost">🔊 השמיעי</button>
+          <button id="chInv" class="btn ghost">🔄 היפוך</button>
+        </div>
+      </div>
+      <canvas id="chCv"></canvas>
+      <button id="chGame" class="btn hot wide"></button>
+      <div class="sub">בחרי אקורד ללמוד, או סמני אילו שלבים ייכנסו לאתגר:</div>
+      <div id="chGrid"></div>
+    </div>
+  </section>
+
+  <section id="scr-settings" class="scr">
+    <header class="top"><div class="brand">⚙️ הגדרות</div></header>
+    <div class="scroll pad" id="setBody"></div>
+  </section>
+
+  <nav id="nav">
+    <button data-go="home" class="on">🎵<span>שירים</span></button>
+    <button data-go="chords">🎼<span>אקורדים</span></button>
+    <button data-go="settings">⚙️<span>הגדרות</span></button>
+  </nav>
+  <div id="toast"></div>
+  <input type="file" id="midiFile" accept=".mid,.midi,audio/midi" hidden>
+</div>
+
+<script src="js/store.js"></script>
+<script src="js/music.js"></script>
+<script src="js/songs.js"></script>
+<script src="js/catalog.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/input.js"></script>
+<script src="js/keyboard.js"></script>
+<script src="js/game.js"></script>
+<script src="js/chords.js"></script>
+<script src="js/midifile.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
