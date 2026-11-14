@@ -269,6 +269,10 @@ const Game = (() => {
     let ch = '';
     if (B.chords.length) { for (const c of B.chords) { if (c.start <= t + 0.05) ch = c.name; else break; } }
     setHud('hudChord', ch ? `${ch} · ${Music.chordHeb(ch, style)}` : '');
+    let ly = '';
+    for (const l of B.lyrics) { if (l[0] <= t + 0.4) ly = l[1]; else break; }
+    setHud('hudLyric', t < range[0] - 0.4 ? '' : ly);
+    $('hudLyric').style.setProperty('--lyTop', (staffH + 10) + 'px');
     if (msgUntil && now > msgUntil) { msgUntil = 0; $('hudMsg').classList.remove('on'); }
   }
 

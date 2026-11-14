@@ -131,3 +131,8 @@ input[type=range] { width: 100%; accent-color: var(--acc); height: 32px; }
 .card.want { background: transparent; border-style: dashed; }
 .card.want b { color: var(--muted); }
 .card.want .row { color: var(--acc); font-weight: 600; }
+
+#hudLyric { position: absolute; top: 0; left: 0; right: 0; margin-top: var(--lyTop, 8px); text-align: center; font-size: clamp(18px, 3.4vw, 30px); font-weight: 700; color: #fff; text-shadow: 0 2px 10px #000, 0 0 3px #000; pointer-events: none; padding: 0 12px; }
+#hudLyric:empty { display: none; }
+#adVideo iframe { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 14px; display: block; margin-bottom: 10px; }
+.pill.warn { background: #7f1d1d; color: #fecaca; }

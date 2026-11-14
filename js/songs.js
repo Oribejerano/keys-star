@@ -20,28 +20,61 @@ const SONGS = (() => {
   const cc = 'D4:.5 F4:.5 E4:.5 D4:.5 | G4 G4 | G4:.5 A4:.5 E4:.5 F4:.5 | D4 D4 | D4:.5 F4:.5 E4:.5 D4:.5';
   const jb = 'E4 E4 E4:2 | E4 E4 E4:2 | E4 G4 C4:1.5 D4:.5 | E4:4 | F4 F4 F4:1.5 F4:.5 | F4 E4 E4 E4:.5 E4:.5';
   const mn = 'D5 G4:.5 A4:.5 B4:.5 C5:.5 | D5 G4 G4 | E5 C5:.5 D5:.5 E5:.5 F#5:.5 | G5 G4 G4 | C5 D5:.5 C5:.5 B4:.5 A4:.5 | B4 C5:.5 B4:.5 A4:.5 G4:.5';
+  const su = 'E4 G4 G4:1.5 A4:.5 | G4 E4 C4:1.5 D4:.5';
+  const ag = 'C4:2 E4:.5 C4:.5 | E4:2 D4';
+  const sn = 'G4:1.5 A4:.5 G4 | E4:3', sn2 = 'A4:2 A4 | C5:1.5 B4:.5 A4 | G4:1.5 A4:.5 G4 | E4:3';
   const odeA = 'E4 E4 F4 G4 | G4 F4 E4 D4 | C4 C4 D4 E4';
 
   return [
     // ---------- חימום ושירים מוכרים ----------
     { id: 'twinkle', title: 'כוכב קטן', composer: 'עממי (מוצרט עיבד)', cat: 'known', level: 1, bpm: 100,
       rh: 'C4 C4 G4 G4 | A4 A4 G4:2 | F4 F4 E4 E4 | D4 D4 C4:2 | G4 G4 F4 F4 | E4 E4 D4:2 | G4 G4 F4 F4 | E4 E4 D4:2 | C4 C4 G4 G4 | A4 A4 G4:2 | F4 F4 E4 E4 | D4 D4 C4:2',
-      chords: 'C F:2 C:2 F:2 C:2 G:2 C:2 C:2 F:2 C:2 G:2 C:2 F:2 C:2 G:2 C F:2 C:2 F:2 C:2 G:2 C:2' },
+      chords: 'C F:2 C:2 F:2 C:2 G:2 C:2 C:2 F:2 C:2 G:2 C:2 F:2 C:2 G:2 C F:2 C:2 F:2 C:2 G:2 C:2',
+      lyrics: [[0, 'Twinkle, twinkle, little star'], [8, 'How I wonder what you are'], [16, 'Up above the world so high'], [24, 'Like a diamond in the sky'], [32, 'Twinkle, twinkle, little star'], [40, 'How I wonder what you are']] },
     { id: 'jacob', title: 'אחינו יעקב', composer: 'עממי צרפתי', cat: 'known', level: 1, bpm: 110,
       rh: 'C4 D4 E4 C4 | C4 D4 E4 C4 | E4 F4 G4:2 | E4 F4 G4:2 | G4:.5 A4:.5 G4:.5 F4:.5 E4 C4 | G4:.5 A4:.5 G4:.5 F4:.5 E4 C4 | C4 G3 C4:2 | C4 G3 C4:2',
-      chords: 'C C C C C C C:1 G:1 C:2 C:1 G:1 C:2' },
+      chords: 'C C C C C C C:1 G:1 C:2 C:1 G:1 C:2',
+      lyrics: [[0, 'אחינו יעקב, אחינו יעקב'], [8, 'אל תישן, אל תישן'], [16, 'הפעמון מצלצל, הפעמון מצלצל'], [24, 'דין דן דון, דין דן דון']] },
     { id: 'yonatan', title: 'יונתן הקטן', composer: 'עממי גרמני', cat: 'israeli', level: 1, bpm: 112,
       rh: 'G4 E4 E4:2 | F4 D4 D4:2 | C4 D4 E4 F4 | G4 G4 G4:2 | G4 E4 E4:2 | F4 D4 D4:2 | C4 E4 G4 G4 | C4:4 | D4 D4 D4 D4 | D4 E4 F4:2 | E4 E4 E4 E4 | E4 F4 G4:2 | G4 E4 E4:2 | F4 D4 D4:2 | C4 E4 G4 G4 | C4:4',
-      chords: 'C G C C C G C C G G C C C G C C' },
+      chords: 'C G C C C G C C G G C C C G C C',
+      lyrics: [[0, 'יונתן הקטן'], [8, 'רץ בבוקר אל הגן'], [16, 'הוא טיפס על העץ'], [24, 'אפרוחים חיפש'], [32, 'אוי ואבוי לו לשובב'], [40, 'חור גדול במכנסיו'], [48, 'מן העץ התגלגל'], [56, 'ועונשו קיבל']] },
     { id: 'birthday', title: 'יום הולדת שמח', composer: 'עממי', cat: 'known', level: 2, bpm: 100, beats: 3, pickup: 1,
       rh: 'G4:.75 G4:.25 | A4 G4 C5 | B4:2 G4:.75 G4:.25 | A4 G4 D5 | C5:2 G4:.75 G4:.25 | G5 E5 C5 | B4 A4 F5:.75 F5:.25 | E5 C5 D5 | C5:3',
-      chords: 'C G G C C F C:2 G:1 C' },
+      chords: 'C G G C C F C:2 G:1 C',
+      lyrics: [[0, 'יום הולדת שמח'], [6, 'יום הולדת שמח'], [12, 'יום הולדת, יום הולדת'], [18, 'יום הולדת שמח!']] },
     { id: 'jingle', title: "ג'ינגל בלס", composer: 'ג׳יימס פיירפונט', cat: 'known', level: 2, bpm: 120,
       rh: `${jb} | E4 D4 D4 E4 | D4:2 G4:2 | ${jb} | G4 G4 F4 D4 | C4:4`,
-      chords: 'C C C C F C D G C C C C F C G C' },
+      chords: 'C C C C F C D G C C C C F C G C',
+      lyrics: [[0, 'Jingle bells, jingle bells'], [8, 'Jingle all the way'], [16, 'Oh what fun it is to ride'], [24, 'In a one-horse open sleigh'], [32, 'Jingle bells, jingle bells'], [40, 'Jingle all the way'], [48, 'Oh what fun it is to ride'], [56, 'In a one-horse open sleigh']] },
     { id: 'hatikvah', title: 'התקווה', composer: 'ההמנון הלאומי', cat: 'israeli', level: 3, bpm: 80,
       rh: `${hatA} | ${hatA} | ${hatB} | ${hatB} | ${hatC} | ${hatC}`,
-      chords: rep('Dm Gm:2 Dm:2 Gm:2 Dm:2 A:2 Dm:2', 2) + ' ' + rep('Dm Gm:2 Dm:2', 2) + ' ' + rep('F C:2 F:2 Gm:2 Dm:2 A:2 Dm:2', 2) },
+      chords: rep('Dm Gm:2 Dm:2 Gm:2 Dm:2 A:2 Dm:2', 2) + ' ' + rep('Dm Gm:2 Dm:2', 2) + ' ' + rep('F C:2 F:2 Gm:2 Dm:2 A:2 Dm:2', 2),
+      lyrics: [[0, 'כל עוד בלבב פנימה'], [8, 'נפש יהודי הומייה'], [16, 'ולפאתי מזרח קדימה'], [24, 'עין לציון צופייה'], [32, 'עוד לא אבדה תקוותנו'], [40, 'התקווה בת שנות אלפיים'], [48, 'להיות עם חופשי בארצנו'], [56, 'ארץ ציון וירושלים'], [64, 'להיות עם חופשי בארצנו'], [72, 'ארץ ציון וירושלים']] },
+
+    { id: 'london', title: 'גשר לונדון', composer: 'עממי אנגלי', cat: 'known', level: 1, bpm: 112,
+      rh: 'G4:1.5 A4:.5 G4 F4 | E4 F4 G4:2 | D4 E4 F4:2 | E4 F4 G4:2 | G4:1.5 A4:.5 G4 F4 | E4 F4 G4:2 | D4:2 G4:2 | E4 C4:3',
+      chords: 'C C G C C C G C' },
+    { id: 'yankee', title: 'ינקי דודל', composer: 'עממי אמריקאי', cat: 'known', level: 1, bpm: 120,
+      rh: 'C4 C4 D4 E4 | C4 E4 D4 G3 | C4 C4 D4 E4 | C4:2 B3:2 | C4 C4 D4 E4 | F4 E4 D4 C4 | B3 G3 A3 B3 | C4:2 C4:2',
+      chords: 'C C:2 G:2 C C:2 G:2 C F G C' },
+    { id: 'saints', title: 'כשהקדושים צועדים', composer: 'עממי אמריקאי', cat: 'known', level: 2, bpm: 126,
+      rh: 'R C4 E4 F4 | G4:4 | R C4 E4 F4 | G4:4 | R C4 E4 F4 | G4:2 E4:2 | C4:2 E4:2 | D4:4 | R E4 E4 D4 | C4:3 C4 | E4:2 G4:2 | G4 F4:3 | R:2 E4 F4 | G4:2 E4:2 | C4:2 D4:2 | C4:4',
+      chords: 'C C C C C C C G C C C F F C C:2 G:2 C' },
+    { id: 'susanna', title: 'הו סוזנה', composer: 'סטיבן פוסטר', cat: 'known', level: 2, bpm: 120, pickup: 1,
+      rh: `C4:.5 D4:.5 | ${su} | E4 E4 D4 C4 | D4:3 C4:.5 D4:.5 | ${su} | E4 E4 D4 D4 | C4:4 | F4:2 F4:2 | A4 A4:2 A4 | G4 G4 E4 C4 | D4:3 C4:.5 D4:.5 | ${su} | E4 E4 D4 D4 | C4:3`,
+      chords: 'C C C G C C C:2 G:2 C F F C G C C C:2 G:2 C' },
+    { id: 'grace', title: 'Amazing Grace', composer: 'עממי', cat: 'known', level: 2, bpm: 90, beats: 3, pickup: 1,
+      rh: `G3 | ${ag} | C4:2 A3 | G3:2 G3 | ${ag} | G4:3 | G4:2 E4 | G4:2 E4:.5 C4:.5 | E4:2 D4 | C4:2 A3 | G3:2 G3 | ${ag} | C4:3`,
+      chords: 'C C F C C C G G C C F C C G C',
+      lyrics: [[0, 'Amazing grace, how sweet the sound'], [12, 'That saved a wretch like me'], [24, 'I once was lost, but now am found'], [36, 'Was blind, but now I see']] },
+    { id: 'silent', title: 'לילה שקט', composer: 'פרנץ גרובר', cat: 'known', level: 2, bpm: 96, beats: 3,
+      rh: `${sn} | ${sn} | D5:2 D5 | B4:3 | C5:2 C5 | G4:3 | ${sn2} | ${sn2} | D5:2 D5 | F5:1.5 D5:.5 B4 | C5:3 | E5:3 | C5 G4 E4 | G4:1.5 F4:.5 D4 | C4:3 | C4:3`,
+      chords: 'C C C C G G C C F F C C F F C C G G C C C G C C',
+      lyrics: [[0, 'Silent night, holy night'], [12, 'All is calm, all is bright'], [24, 'Round yon virgin mother and child'], [36, 'Holy infant so tender and mild'], [48, 'Sleep in heavenly peace'], [60, 'Sleep in heavenly peace']] },
+    { id: 'bells', title: 'פעמוני החג', composer: 'לאונטוביץ׳', cat: 'classic', level: 2, bpm: 150, beats: 3,
+      rh: rep('Bb4 A4:.5 Bb4:.5 G4', 8) + ' ' + rep('D5 C5:.5 D5:.5 Bb4', 4) + ' G4:3',
+      chords: 'Gm Gm Gm Gm Eb Eb Gm Gm Gm Gm Gm Gm Gm' },
 
     // ---------- קלאסי ----------
     { id: 'ode', title: 'אודה לשמחה', composer: 'בטהובן', cat: 'classic', level: 1, bpm: 108,

@@ -44,6 +44,10 @@
         <button class="mode hot" id="adRec"><b>⏺ הקלטה</b><span>נגני את השיר פעם אחת והאפליקציה תשמור את התווים</span></button>
         <button class="mode" id="adMidi"><b>📂 קובץ MIDI</b><span>יש קובץ ‎.mid של השיר? טוענים אותו</span></button>
       </div>
+      <h3>סרטון לימוד (לא חובה)</h3>
+      <div id="adVideo"></div>
+      <form id="adVidForm" class="ask"><input id="adVidUrl" type="text" inputmode="url" placeholder="הורה: הדביקו כאן קישור לסרטון" autocomplete="off"><button class="btn ghost" type="submit">שמירה</button></form>
+      <div class="sub">הסרטון מתנגן כאן, בתוך האפליקציה.</div>
       <button id="adRemove" class="link danger" hidden>הסרה מהרשימה</button>
     </div>
   </section>
@@ -84,6 +88,7 @@
     <div class="prog"><i id="hudProg"></i></div>
     <div class="stage">
       <canvas id="gameCv"></canvas>
+      <div id="hudLyric"></div>
       <div id="hudMsg"></div>
     </div>
   </section>
@@ -133,7 +138,7 @@
     <button data-go="settings">⚙️<span>הגדרות</span></button>
   </nav>
   <div id="toast"></div>
-  <input type="file" id="midiFile" accept=".mid,.midi,audio/midi" hidden>
+  <input type="file" id="midiFile" accept=".mid,.midi,.kar,audio/midi" multiple hidden>
 </div>
 
 <script src="js/store.js"></script>

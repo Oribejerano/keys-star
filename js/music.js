@@ -87,7 +87,7 @@ const Music = (() => {
       .sort((a, b) => a.start - b.start || a.midi - b.midi);
     let end = 0; for (const n of notes) end = Math.max(end, n.start + n.dur);
     const total = pickup + Math.ceil((end - pickup - 1e-6) / beats) * beats;
-    return { notes, chords, total, beats, pickup, bars: Math.round((total - pickup) / beats) };
+    return { notes, chords, lyrics: song.lyrics || [], total, beats, pickup, bars: Math.round((total - pickup) / beats) };
   }
 
   return { LET, SOL, pc, toMidi, name, isBlack, parseChord, chordNotes, chordHeb, arrangements, build };

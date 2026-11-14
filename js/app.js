@@ -24,8 +24,9 @@
   }
   document.addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) { Snd.unlock(); go(b.dataset.go); } });
 
+  // המיקרופון הוא הבסיס: נפתח בכל תחילת שיר/תרגול (אלא אם כובה במפורש בהגדרות)
   async function ensureMic() {
-    if (CFG.mic && !Input.micOn) { const ok = await Input.startMic(); if (!ok) toast('אין גישה למיקרופון — אפשר לנגן במגע', 2500); }
+    if (CFG.mic && !Input.micOn) { const ok = await Input.startMic(); if (!ok) toast('🎤 אין גישה למיקרופון — צריך לאשר אותו בדפדפן כדי שאשמע את הנגינה', 3500); }
   }
 
   // ---------- התקדמות ----------
@@ -94,8 +95,20 @@
     pendingAdd = item;
     $('adTitle').textContent = item.title; $('adArtist').textContent = item.artist || '';
     $('adRemove').hidden = !D.wishes.some(w => w.title === item.title);
+    showVideo();
     go('add');
   }
+  const ytId = u => { const m = /(?:youtu\.be\/|[?&]v=|\/embed\/|\/shorts\/)([\w-]{11})/.exec(u || ''); return m ? m[1] : null; };
+  function showVideo() {
+    const id = pendingAdd && D.videos[pendingAdd.title];
+    $('adVideo').innerHTML = id ? `<iframe src="https://www.youtube-nocookie.com/embed/${id}?rel=0&playsinline=1" allow="encrypted-media; fullscreen" allowfullscreen></iframe>` : '';
+  }
+  $('adVidForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const id = ytId($('adVidUrl').value.trim());
+    if (!id) return toast('לא זיהיתי קישור לסרטון', 2000);
+    D.videos[pendingAdd.title] = id; Store.save(); $('adVidUrl').value = ''; showVideo();
+  });
   $('adRec').onclick = () => startRecord();
   $('adMidi').onclick = () => $('midiFile').click();
   $('adRemove').onclick = () => { D.wishes = D.wishes.filter(w => w.title !== pendingAdd.title); Store.save(); go('home'); };
@@ -106,9 +119,19 @@
     toast('השיר נוסף! 🎉', 1800); openSong(song.id);
   }
   $('midiFile').addEventListener('change', async e => {
-    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
-    try { saveNew(MidiFile.parse(await f.arrayBuffer(), f.name.replace(/\.[^.]+$/, ''))); }
-    catch (err) { toast(err.message || 'לא הצלחתי לקרוא את הקובץ', 2500); }
+    const files = [...e.target.files]; e.target.value = ''; if (!files.length) return;
+    const nameOf = f => f.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ');
+    if (files.length === 1) {
+      try { saveNew(MidiFile.parse(await files[0].arrayBuffer(), nameOf(files[0]))); }
+      catch (err) { toast(err.message || 'לא הצלחתי לקרוא את הקובץ', 2500); }
+      return;
+    }
+    // כמה קבצים בבת אחת: כל קובץ נהיה שיר, בקטגוריה שממנה נכנסנו
+    let ok = 0; const cat = pendingAdd ? pendingAdd.cat : 'mine';
+    for (const [k, f] of files.entries()) {
+      try { const sg = MidiFile.parse(await f.arrayBuffer(), nameOf(f)); sg.id += '_' + k; sg.cat = cat; D.mine.push(sg); ok++; } catch (err) { /* מדלגים על קובץ לא תקין */ }
+    }
+    Store.save(); pendingAdd = null; toast(`נוספו ${ok} שירים 🎉`, 2200); go('home');
   });
   async function startRecord() {
     Snd.unlock(); await ensureMic();
@@ -151,7 +174,8 @@
 
   // ---------- הרצת משחק ----------
   function gameHud(mode) {
-    $('gSrc').textContent = Input.micOn ? '🎤' : Input.midi.ok ? '🎹 MIDI' : '👆';
+    $('gSrc').textContent = Input.micOn ? '🎤 מקשיבה' : Input.midi.ok ? '🎹 MIDI' : '🎤 כבוי';
+    $('gSrc').classList.toggle('warn', !Input.micOn && !Input.midi.ok);
     $('gPause').textContent = '⏸';
     ['gPause', 'gSlow', 'gFast', 'gTempo'].forEach(id => { $(id).style.display = mode === 'record' ? 'none' : ''; });
   }
