@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0b1023">
+<meta name="theme-color" content="#fbeaf6">
 <title>כוכבת הקלידים</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg">
@@ -18,57 +18,53 @@
 <div id="app">
 
   <section id="scr-home" class="scr on">
-    <header class="top">
-      <div class="brand">🎹 כוכבת הקלידים</div>
+    <header class="hello">
+      <div class="mascot" aria-hidden="true">🎹</div>
+      <div class="grow"><h1 id="hiTitle">היי!</h1><div class="sub">מה ננגן היום?</div></div>
       <button class="icon" id="fsBtn" title="מסך מלא">⛶</button>
-      <div class="stats"><span id="stStreak"></span><span id="stStars"></span><span id="stLvl"></span></div>
     </header>
-    <div class="xpbar"><i id="xpFill"></i></div>
-    <div class="scroll">
+    <div class="rotate"><i>🔄</i>כדאי לסובב את המכשיר לרוחב — רואים הרבה יותר טוב</div>
+    <div class="scroll homegrid">
+      <aside class="side">
+      <div class="statrow">
+        <div class="stat lvlbox"><div class="r"><b id="stLvl">רמה 1</b><small id="stNext"></small></div><div class="xpbar"><i id="xpFill"></i></div></div>
+        <div class="stat"><span>⭐</span><b id="stStars">0</b><small>כוכבים</small></div>
+        <div class="stat"><span>🔥</span><b id="stStreak">0</b><small>ימים ברצף</small></div>
+      </div>
       <div id="daily"></div>
-      <form id="askForm" class="ask">
-        <input id="askInput" type="text" placeholder="🔍 איזה שיר בא לך לנגן?" autocomplete="off">
-        <button class="btn" type="submit">הוסיפי</button>
-      </form>
+      </aside>
+      <main class="main">
+      <div class="search"><input id="askInput" type="search" placeholder="🔍 חיפוש שיר" autocomplete="off" enterkeyhint="search"></div>
       <div id="catChips" class="chips scrollx"></div>
       <div id="songList"></div>
-    </div>
-  </section>
-
-  <section id="scr-add" class="scr">
-    <header class="top"><button class="icon" data-go="home">→</button><div class="brand" id="adTitle"></div></header>
-    <div class="scroll pad">
-      <div class="sub" id="adArtist"></div>
-      <div class="tip">השיר הזה עוד לא באפליקציה. מוסיפים אותו פעם אחת — ואז אפשר לתרגל אותו בכל המצבים, עם ניקוד וכוכבים.</div>
-      <h3>איך מוסיפים?</h3>
-      <div class="modes">
-        <button class="mode hot" id="adRec"><b>⏺ הקלטה</b><span>נגני את השיר פעם אחת והאפליקציה תשמור את התווים</span></button>
-        <button class="mode" id="adMidi"><b>📂 קובץ MIDI</b><span>יש קובץ ‎.mid של השיר? טוענים אותו</span></button>
-      </div>
-      <h3>סרטון לימוד (לא חובה)</h3>
-      <div id="adVideo"></div>
-      <form id="adVidForm" class="ask"><input id="adVidUrl" type="text" inputmode="url" placeholder="הורה: הדביקו כאן קישור לסרטון" autocomplete="off"><button class="btn ghost" type="submit">שמירה</button></form>
-      <div class="sub">הסרטון מתנגן כאן, בתוך האפליקציה.</div>
-      <button id="adRemove" class="link danger" hidden>הסרה מהרשימה</button>
+      </main>
     </div>
   </section>
 
   <section id="scr-song" class="scr">
-    <header class="top"><button class="icon" data-go="home">→</button><div class="brand" id="sgTitle"></div><div id="sgStars" class="stats"></div></header>
-    <div class="scroll pad">
-      <div class="sub" id="sgComposer"></div>
-      <h3>מה מנגנים?</h3>
-      <div id="sgArr" class="chips"></div>
-      <h3>מהירות: <b id="sgTempoVal">100%</b></h3>
-      <input type="range" id="sgTempo" min="50" max="120" step="5" value="100">
+    <header class="top"><button class="icon" data-go="home" title="חזרה">→</button><div class="grow"></div><div id="sgStars" class="stats"></div></header>
+    <div class="scroll pad songgrid">
+      <div class="songside">
+      <div class="songhero" id="sgHero"><div class="cover big" id="sgCover"></div><div class="grow"><h1 id="sgTitle"></h1><div class="sub" id="sgComposer"></div></div></div>
+      </div>
+      <div class="songmain">
       <h3>איך מתרגלים?</h3>
       <div class="modes">
-        <button class="mode" data-mode="listen"><b>👂 האזנה</b><span>רואים ושומעים את השיר</span></button>
-        <button class="mode" data-mode="wait"><b>🐢 לימוד</b><span>השיר מחכה לך בכל תו ומתקן טעויות</span></button>
-        <button class="mode hot" data-mode="smart"><b>🎯 אימון חכם</b><span>חלק אחרי חלק, מלאט למהיר</span></button>
-        <button class="mode" data-mode="play"><b>🎮 נגינה</b><span>בקצב, עם ניקוד, רצף וכוכבים</span></button>
+        <button class="mode" data-mode="listen"><i>👂</i><b>להקשיב</b><span>שומעים ורואים את השיר</span></button>
+        <button class="mode" data-mode="wait"><i>🐢</i><b>ללמוד</b><span>השיר מחכה לך בכל תו</span></button>
+        <button class="mode hot" data-mode="smart"><i>🎯</i><b>אימון חכם</b><span>חלק אחרי חלק, מלאט למהיר</span></button>
+        <button class="mode" data-mode="play"><i>🎮</i><b>משחק</b><span>בקצב, עם ניקוד וכוכבים</span></button>
+      </div>
+      </div>
+      <div class="opts">
+      <h3>מה מנגנים?</h3>
+      <div id="sgArr" class="chips"></div>
+      <h3>מהירות</h3>
+      <div id="sgSpeed" class="chips speed">
+        <button class="chip" data-tempo="0.5">🐌 לאט מאוד</button><button class="chip" data-tempo="0.7">🐢 לאט</button><button class="chip" data-tempo="0.85">🚶 בינוני</button><button class="chip" data-tempo="1">🐇 רגיל</button>
       </div>
       <button id="sgDelete" class="link danger" hidden>מחיקת השיר</button>
+      </div>
     </div>
   </section>
 
@@ -92,14 +88,18 @@
       <canvas id="gameCv"></canvas>
       <div id="hudLyric"></div>
       <div id="hudMsg"></div>
+      <div class="rotate game"><i>🔄</i>סובבי לרוחב כדי לראות יותר קלידים</div>
     </div>
   </section>
 
   <section id="scr-result" class="scr">
     <div class="scroll pad center">
+      <div class="rshead">
       <div id="rsStars" class="bigstars"></div>
       <h1 id="rsTitle"></h1>
       <div id="rsAcc" class="acc"></div>
+      </div>
+      <div class="rsbody">
       <div id="rsGrid" class="rgrid"></div>
       <div id="rsTip" class="tip"></div>
       <div class="btns">
@@ -107,12 +107,14 @@
         <button id="rsAgain" class="btn">🔁 שוב</button>
         <button id="rsBack" class="btn ghost">חזרה לשיר</button>
       </div>
+      </div>
     </div>
   </section>
 
   <section id="scr-chords" class="scr">
     <header class="top"><div class="brand">🎼 אקורדים</div><div class="stats"><span id="chInfo"></span></div></header>
-    <div class="scroll pad">
+    <div class="scroll pad chgrid">
+      <div class="chmain">
       <div class="chcard">
         <div id="chName">C</div>
         <div id="chHeb"></div>
@@ -124,8 +126,11 @@
       </div>
       <canvas id="chCv"></canvas>
       <button id="chGame" class="btn hot wide"></button>
+      </div>
+      <div class="chlist">
       <div class="sub">בחרי אקורד ללמוד, או סמני אילו שלבים ייכנסו לאתגר:</div>
       <div id="chGrid"></div>
+      </div>
     </div>
   </section>
 
@@ -140,9 +145,9 @@
   </section>
 
   <nav id="nav">
-    <button data-go="home" class="on">🎵<span>שירים</span></button>
-    <button data-go="chords">🎼<span>אקורדים</span></button>
-    <button data-go="settings">⚙️<span>הגדרות</span></button>
+    <button data-go="home" class="on"><i>🎵</i><span>שירים</span></button>
+    <button data-go="chords"><i>🎼</i><span>אקורדים</span></button>
+    <button data-go="settings"><i>⚙️</i><span>הגדרות</span></button>
   </nav>
   <div id="toast"></div>
   <input type="file" id="midiFile" accept=".mid,.midi,.kar,audio/midi" multiple hidden>
@@ -151,7 +156,6 @@
 <script src="js/store.js"></script>
 <script src="js/music.js"></script>
 <script src="js/songs.js"></script>
-<script src="js/catalog.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/detector.js"></script>
 <script src="js/input.js"></script>

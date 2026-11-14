@@ -55,7 +55,7 @@ const Input = (() => {
         srcNode = ac.createMediaStreamSource(stream);
       }
     } catch (e) { mic.error = 'אין גישה למיקרופון'; return false; }
-    det = new Detector(ac.sampleRate, { tune: CFG.tune || 0 });
+    det = new Detector(ac.sampleRate, { tune: CFG.tune || 0, ref: CFG.ref || 0 });
     an = ac.createAnalyser(); an.fftSize = det.N; an.smoothingTimeConstant = 0;
     srcNode.connect(an);
     td = new Float32Array(det.N);
@@ -94,7 +94,16 @@ const Input = (() => {
   // המשחק מודיע לאילו תווים הוא מצפה עכשיו; הם מזוהים בסף רגיש יותר
   function setExpected(list) { expected = list && list.length ? new Set(list) : null; }
   // שומר את כיוון הכלי שנלמד, כדי שבפעם הבאה ההאזנה תתחיל כבר מכוונת
-  function syncTune() { if (det && Math.abs((CFG.tune || 0) - det.tune) > 0.5) { CFG.tune = Math.round(det.tune * 10) / 10; Store.save(); } }
+  function syncTune() {
+    if (!det) return;
+    let ch = false;
+    if (Math.abs((CFG.tune || 0) - det.tune) > 0.5) { CFG.tune = Math.round(det.tune * 10) / 10; ch = true; }
+    // עוצמת הנגינה הרגילה שנלמדה (לפיה מבדילים בין נגינה לדיבור) — נשמרת, כדי שההגנה תפעל כבר מהתו הראשון
+    if (det.ref > 0 && Math.abs((CFG.ref || 0) - det.ref) > 0.1 * det.ref) { CFG.ref = Math.round(det.ref * 1000) / 1000; ch = true; }
+    if (ch) Store.save();
+  }
+  // לומדים מחדש את עוצמת הנגינה (בבדיקת ההאזנה, או כשמזיזים את המכשיר)
+  function resetRef() { CFG.ref = 0; if (det) det.ref = 0; Store.save(); }
 
   // מקליט את האות הגולמי מהמיקרופון (להקלטות הכיוונון). t0 = הרגע (בשעון performance.now) של הדגימה הראשונה
   function startRec(maxSec) {
@@ -124,10 +133,10 @@ const Input = (() => {
   function micInfo() {
     const ac = Snd.ctx(), tr = stream && stream.getAudioTracks()[0], ts = tr && tr.getSettings ? tr.getSettings() : {};
     return {
-      sr: ac.sampleRate, baseLatency: ac.baseLatency, outputLatency: ac.outputLatency, N: det ? det.N : 0, tune: det ? det.tune : 0, slowEvery,
+      sr: ac.sampleRate, baseLatency: ac.baseLatency, outputLatency: ac.outputLatency, N: det ? det.N : 0, tune: det ? det.tune : 0, ref: det ? det.ref : 0, slowEvery,
       mic: tr ? tr.label : '', ec: ts.echoCancellation, ns: ts.noiseSuppression, agc: ts.autoGainControl, ch: ts.channelCount, micLatency: ts.latency,
     };
   }
 
-  return { on, emit, touch, heldNotes, initMIDI, midi, startMic, stopMic, setExpected, syncTune, startRec, micInfo, mic, get micOn() { return mic.on; } };
+  return { on, emit, touch, heldNotes, initMIDI, midi, startMic, stopMic, setExpected, syncTune, resetRef, startRec, micInfo, mic, get micOn() { return mic.on; } };
 })();

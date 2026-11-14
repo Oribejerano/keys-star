@@ -118,7 +118,7 @@ function run(buf, sr, expectedFn, hopMs = 10, opt) {
     const st = p - N;
     if (st >= 0) frame.set(buf.subarray(st, p)); else { frame.fill(0); frame.set(buf.subarray(0, p), -st); }
     const tSec = p / sr;
-    const fastOnly = h5 && (fi++ & 1) === 0;
+    const slow = (opt && opt.slow) || 2, fastOnly = h5 && (fi++ % slow) !== slow - 1; // slow=4: מכשיר איטי, ניתוח מלא כל 20 אלפיות שנייה
     for (const e of det.process(frame, tSec * 1000, expectedFn ? expectedFn(tSec) : null, hop, fastOnly)) if (e.type === 'on') ev.push({ t: tSec, midi: e.midi, ghost: e.ghost, t0: e.t0 / 1000 });
   }
   ev.det = det;
@@ -174,6 +174,7 @@ if (require.main !== module) return;
 
 const verbose = process.argv.includes('-v'), quick = process.argv.includes('-q');
 const only = (process.argv.find(a => a.startsWith('--only=')) || '').slice(7);
+const OPT = {}; for (const kv of ((process.argv.find(a => a.startsWith('--opt=')) || '').slice(6)).split(',').filter(Boolean)) { const [k, v] = kv.split(':'); OPT[k] = +v; }
 const pct = v => (v * 100).toFixed(1).padStart(5) + '%', ms = v => String(Math.round(v * 1000)).padStart(4);
 const shifts = quick ? [-12, 7, 12] : [-12, -7, -5, -2, -1, 1, 2, 5, 7, 12];
 const S = { free: 0, guided: 0, fp: 0, wrong: 0, dbl: 0, imp: 0, lat: 0, terr: 0, n: 0 };
@@ -184,7 +185,7 @@ for (const sr of quick ? [48000] : [48000, 44100]) for (const [name, mk, o] of s
   for (let s = 0; s < K; s++) {
     const R = rng(1000 + s * 77 + name.length), groups = mk(R);
     const buf = render(groups, Object.assign({ sr, seed: 5 + s }, o));
-    const a = evalFree(groups, run(buf, sr, null)), b = evalGuided(groups, buf, sr), c = evalImpostor(groups, buf, sr, shifts);
+    const a = evalFree(groups, run(buf, sr, null, 10, OPT)), b = evalGuided(groups, buf, sr, OPT), c = evalImpostor(groups, buf, sr, shifts, OPT);
     fr += a.recall / K; fp += a.fp; gr += b.recall / K; gw += b.wrong; gd += b.dbl; lat += b.lat / K; terr += b.terr / K; tb += b.tbias / K; tune = b.tune;
     const vals = Object.values(c); im += vals.reduce((x, y) => x + y, 0) / vals.length / K; imMax = Math.max(imMax, ...vals);
     for (const k in c) det[k] = (det[k] || 0) + c[k] / K;
@@ -201,7 +202,7 @@ if (!only) {
   console.log('\nרעש בלבד (10 שניות כל אחד) — זיהויי שווא: חופשי / כשהמשחק מצפה לתו:');
   for (const [name, o] of [['שקט + רעש חדר', { snr: 0, hum: 1 }], ['דיבור', { speech: 0, snr: 10 }], ['דיבור + נקישות + זמזום', { speech: 0, snr: 6, taps: 1, hum: 1 }], ['נקישות', { taps: 1, snr: 10 }]]) {
     let a = 0, b = 0;
-    for (let s = 0; s < 4; s++) { const buf = render([{ t: 9, notes: [], dur: 0 }], Object.assign({ sr: 48000, seed: 40 + s }, o)); a += run(buf, 48000, null).length; b += run(buf, 48000, () => new Set([60 + s * 3, 64 + s, 48 + s])).length; }
+    for (let s = 0; s < 4; s++) { const buf = render([{ t: 9, notes: [], dur: 0 }], Object.assign({ sr: 48000, seed: 40 + s }, o)); a += run(buf, 48000, null, 10, OPT).length; b += run(buf, 48000, () => new Set([60 + s * 3, 64 + s, 48 + s]), 10, OPT).length; }
     console.log(' ', name.padEnd(28), a, '/', b);
   }
 }

@@ -2,9 +2,8 @@
 (() => {
   const $ = id => document.getElementById(id);
   const D = Store.d;
-  D.wishes = D.wishes || [];
   let calMode = false;
-  let curSong = null, arr = 'rh', tempo = 1, lastRun = null, smartTok = 0, catFilter = 'all', pendingAdd = null, recording = false, setRaf = 0;
+  let curSong = null, arr = 'rh', tempo = 1, lastRun = null, smartTok = 0, catFilter = 'all', query = '', recording = false, setRaf = 0;
   const allSongs = () => [...SONGS, ...D.mine];
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const starsOf = id => { const p = D.prog[id]; return p ? Math.max(p.wait || 0, p.play || 0) : 0; };
@@ -43,33 +42,59 @@
   function renderStats() {
     const lv = level(), base = (lv - 1) * (lv - 1) * 100, next = lv * lv * 100;
     $('stLvl').textContent = `רמה ${lv}`;
-    $('stStreak').textContent = D.streak.n ? `🔥 ${D.streak.n}` : '';
-    $('stStars').textContent = `⭐ ${allSongs().reduce((s, x) => s + starsOf(x.id), 0)}`;
+    $('stNext').textContent = `עוד ${Math.max(0, next - D.xp)} נקודות לרמה ${lv + 1}`;
+    $('stStreak').textContent = D.streak.n || 0;
+    $('stStars').textContent = allSongs().reduce((s, x) => s + starsOf(x.id), 0);
     $('xpFill').style.width = ((D.xp - base) / (next - base) * 100).toFixed(0) + '%';
   }
 
-  // ---------- בית / קטלוג ----------
+  // ---------- בית ----------
+  // כל קטגוריה מקבלת צבע וסמל משלה — כך קל לזהות שירים במבט
+  const LOOK = { known: ['#fbbf24', '#fb7185', '🎈'], israeli: ['#38bdf8', '#34d399', '🌟'], classic: ['#a78bfa', '#6366f1', '🎻'], disney: ['#60a5fa', '#c084fc', '🏰'],
+    ilnew: ['#f472b6', '#a78bfa', '🎤'], rock: ['#fb923c', '#ef4444', '🎸'], mine: ['#f472b6', '#fb923c', '💖'] };
+  const ORDER = ['known', 'israeli', 'disney', 'ilnew', 'classic', 'rock', 'mine'];
+  const catName = id => ((CATS.find(c => c[0] === id) || [])[1] || '').replace(/^\S+\s/, '');
+  // לכל שיר תמונה וצבעים משלו (לשירים המובנים — תמונה שמתאימה לשיר; לשירים שנוספו — לפי השם)
+  const PIC = { twinkle: '⭐', jacob: '😴', yonatan: '🌳', birthday: '🎂', jingle: '🔔', hatikvah: '🇮🇱', london: '🌉', yankee: '🎩', saints: '🎺', susanna: '🪕',
+    grace: '🕊️', silent: '🎄', bells: '🛎️', ode: '🎼', cancan: '💃', kleine: '🌃', mountain: '⛰️', lullaby: '🌙', minuet: '👑', greensleeves: '🍃', canon: '🎻', elise: '💌', turkish: '🎪' };
+  const PICS = ['🎵', '🎶', '🦄', '🌈', '🎀', '🦋', '🍭', '🌸', '🐬', '🍓', '🎠', '🐱', '🌻', '🪐', '🧁', '🐼'];
+  const GRADS = [['#fbbf24', '#fb7185'], ['#38bdf8', '#34d399'], ['#a78bfa', '#6366f1'], ['#f472b6', '#a78bfa'], ['#60a5fa', '#c084fc'], ['#fb923c', '#f43f5e'],
+    ['#34d399', '#22d3ee'], ['#f9a8d4', '#fcd34d'], ['#818cf8', '#ec4899'], ['#2dd4bf', '#818cf8']];
+  const hash = str => { let h = 7; for (const ch of String(str)) h = (h * 31 + ch.codePointAt(0)) >>> 0; return h; };
+  const look = s => { const h = hash(s.id + s.title), g = GRADS[h % GRADS.length]; return [g[0], g[1], PIC[s.id] || PICS[(h >>> 4) % PICS.length]]; };
+  const coverHtml = (s, big) => { const [c1, c2, e] = look(s); return `<div class="cover${big ? ' big' : ''}" style="--c1:${c1};--c2:${c2}"><span>${e}</span></div>`; };
+  const diff = lv => lv <= 2 ? ['easy', 'קל'] : lv === 3 ? ['mid', 'בינוני'] : ['hard', 'מאתגר'];
+  function cardHtml(s) {
+    const [k, t] = diff(s.level || 3);
+    return `<button class="card" data-song="${s.id}">${coverHtml(s)}<b>${esc(s.title)}</b><small>${esc(s.composer || '')}</small><div class="row"><span class="diff ${k}">${t}</span>${starHtml(starsOf(s.id))}</div></button>`;
+  }
   function renderHome() {
     renderStats();
-    const day = Math.floor(Date.now() / 864e5), ds = SONGS[day % SONGS.length];
-    const done = (D.prog[ds.id] || {}).play === 3;
-    $('daily').innerHTML = `<button class="daily" data-song="${ds.id}"><div><b>${done ? '✅' : '🎯'} האתגר היומי: ${esc(ds.title)}</b><span>${done ? 'הושלם! כל הכבוד' : 'השיגי 3 כוכבים במצב נגינה'}</span></div><span class="go">▶</span></button>`;
-    if (!D.cal) $('daily').innerHTML = '<button class="daily" id="homeCal"><div><b>🎤 לפני שמתחילים: בדיקת האזנה</b><span>חצי דקה — בודקים שהאפליקציה שומעת את האורגנית</span></div><span class="go">▶</span></button>' + $('daily').innerHTML;
-    $('catChips').innerHTML = [['all', 'הכול'], ...CATS].map(([id, n]) => `<button class="chip ${catFilter === id ? 'sel' : ''}" data-cat="${id}">${n}</button>`).join('');
-    const have = new Set(D.mine.map(s => s.title));
+    const h = new Date().getHours();
+    $('hiTitle').textContent = h < 5 ? 'לילה טוב! 🌙' : h < 12 ? 'בוקר טוב! ☀️' : h < 17 ? 'צהריים טובים! 🌼' : h < 21 ? 'ערב טוב! 🌆' : 'לילה טוב! 🌙';
+    // כרטיסים בראש: בדיקת האזנה (פעם אחת), המשך מאיפה שהפסקת, האתגר היומי
+    let top = '';
+    if (!D.cal) top += '<button class="daily cal" id="homeCal"><i>🎤</i><div><b>לפני שמתחילים: בדיקת האזנה</b><span>חצי דקה — בודקים שהאפליקציה שומעת את האורגנית</span></div><span class="go">▶</span></button>';
+    const last = D.last && allSongs().find(s => s.id === D.last);
+    if (last) top += `<button class="daily cont" data-song="${last.id}"><i>▶️</i><div><b>להמשיך: ${esc(last.title)}</b><span>${starsOf(last.id) ? 'יש לך כבר ' + starsOf(last.id) + ' ⭐ — אפשר להשיג עוד!' : 'בואי נמשיך לתרגל'}</span></div><span class="go">▶</span></button>`;
+    const day = Math.floor(Date.now() / 864e5), ds = SONGS[day % SONGS.length], done = (D.prog[ds.id] || {}).play === 3;
+    top += `<button class="daily" data-song="${ds.id}"><i>${done ? '🏆' : '🎯'}</i><div><b>האתגר היומי: ${esc(ds.title)}</b><span>${done ? 'הושלם! כל הכבוד' : 'השיגי 3 כוכבים במצב משחק'}</span></div><span class="go">▶</span></button>`;
+    $('daily').innerHTML = top;
+    $('daily').hidden = !!query;
+    // רק קטגוריות שיש בהן שירים
+    const cats = ORDER.filter(id => id === 'mine' || allSongs().some(s => s.cat === id));
+    if (!cats.includes(catFilter) && catFilter !== 'all') catFilter = 'all';
+    $('catChips').innerHTML = [['all', '✨ הכול'], ...cats.map(id => [id, (LOOK[id] || LOOK.mine)[2] + ' ' + catName(id)])].map(([id, n]) => `<button class="chip ${catFilter === id ? 'sel' : ''}" data-cat="${id}">${n}</button>`).join('');
+    $('catChips').hidden = !!query;
     let html = '';
-    for (const [cid, cname] of CATS) {
+    if (query) {
+      const q = query.toLowerCase(), found = allSongs().filter(s => (s.title + ' ' + (s.composer || '')).toLowerCase().includes(q));
+      html = found.length ? `<div class="cat">נמצאו ${found.length} שירים</div><div class="grid">${found.map(cardHtml).join('')}</div>` : '<div class="empty"><i>🔎</i>לא מצאתי שיר כזה באפליקציה</div>';
+    } else for (const cid of cats) {
       if (catFilter !== 'all' && catFilter !== cid) continue;
       const songs = allSongs().filter(s => s.cat === cid);
-      const wants = cid === 'mine' ? D.wishes.filter(w => !have.has(w.title)).map(w => ['mine', w.title, 'הבקשה שלי'])
-        : CATALOG.filter(c => c[0] === cid && !have.has(c[1]));
-      html += `<div class="cat">${cname}</div><div class="grid">`;
-      for (const s of songs) {
-        const dots = [1, 2, 3, 4, 5].map(i => `<i class="${i <= s.level ? 'f' : ''}"></i>`).join('');
-        html += `<button class="card" data-song="${s.id}"><b>${esc(s.title)}</b><small>${esc(s.composer || '')}</small><div class="row"><span class="dots">${dots}</span>${starHtml(starsOf(s.id))}</div></button>`;
-      }
-      wants.forEach(w => { html += `<button class="card want" data-want="${esc(w[1])}" data-artist="${esc(w[2])}" data-wcat="${cid}"><b>${esc(w[1])}</b><small>${esc(w[2])}</small><div class="row"><span>＋ להוסיף</span></div></button>`; });
-      if (cid === 'mine') html += '<button class="card add" data-rec="1">⏺<br>הקלטת שיר חדש</button><button class="card add" data-midi="1">📂<br>קובץ MIDI</button>';
+      html += `<div class="cat">${(LOOK[cid] || LOOK.mine)[2]} ${catName(cid)}</div><div class="grid">${songs.map(cardHtml).join('')}`;
+      if (cid === 'mine') html += '<button class="card add" data-rec="1"><i>⏺</i><b>להקליט שיר</b><small>מנגנים, והאפליקציה זוכרת</small></button><button class="card add" data-midi="1"><i>📂</i><b>קובץ MIDI</b><small>להורים: הוספת שיר מקובץ</small></button>';
       html += '</div>';
     }
     $('songList').innerHTML = html;
@@ -78,48 +103,14 @@
     if (e.target.closest('#homeCal')) { startCal(); return; }
     const c = e.target.closest('[data-cat]'); if (c) { catFilter = c.dataset.cat; renderHome(); return; }
     const s = e.target.closest('[data-song]'); if (s) { openSong(s.dataset.song); return; }
-    const w = e.target.closest('[data-want]'); if (w) { openAdd({ title: w.dataset.want, artist: w.dataset.artist, cat: w.dataset.wcat }); return; }
-    if (e.target.closest('[data-rec]')) { pendingAdd = null; startRecord(); return; }
-    if (e.target.closest('[data-midi]')) { pendingAdd = null; $('midiFile').click(); }
+    if (e.target.closest('[data-rec]')) { startRecord(); return; }
+    if (e.target.closest('[data-midi]')) $('midiFile').click();
   });
-  $('askForm').addEventListener('submit', e => {
-    e.preventDefault();
-    const v = $('askInput').value.trim(); if (!v) return;
-    $('askInput').value = ''; $('askInput').blur();
-    const found = allSongs().find(s => s.title.includes(v));
-    if (found) return openSong(found.id);
-    const cat = CATALOG.find(c => c[1].toLowerCase().includes(v.toLowerCase()));
-    if (cat) return openAdd({ title: cat[1], artist: cat[2], cat: cat[0] });
-    if (!D.wishes.some(w => w.title === v)) { D.wishes.push({ title: v }); Store.save(); }
-    openAdd({ title: v, artist: 'הבקשה שלי', cat: 'mine' });
-  });
-
-  // ---------- הוספת שיר (יוטיוב + הקלטה / MIDI) ----------
-  function openAdd(item) {
-    pendingAdd = item;
-    $('adTitle').textContent = item.title; $('adArtist').textContent = item.artist || '';
-    $('adRemove').hidden = !D.wishes.some(w => w.title === item.title);
-    showVideo();
-    go('add');
-  }
-  const ytId = u => { const m = /(?:youtu\.be\/|[?&]v=|\/embed\/|\/shorts\/)([\w-]{11})/.exec(u || ''); return m ? m[1] : null; };
-  function showVideo() {
-    const id = pendingAdd && D.videos[pendingAdd.title];
-    $('adVideo').innerHTML = id ? `<iframe src="https://www.youtube-nocookie.com/embed/${id}?rel=0&playsinline=1" allow="encrypted-media; fullscreen" allowfullscreen></iframe>` : '';
-  }
-  $('adVidForm').addEventListener('submit', e => {
-    e.preventDefault();
-    const id = ytId($('adVidUrl').value.trim());
-    if (!id) return toast('לא זיהיתי קישור לסרטון', 2000);
-    D.videos[pendingAdd.title] = id; Store.save(); $('adVidUrl').value = ''; showVideo();
-  });
-  $('adRec').onclick = () => startRecord();
-  $('adMidi').onclick = () => $('midiFile').click();
-  $('adRemove').onclick = () => { D.wishes = D.wishes.filter(w => w.title !== pendingAdd.title); Store.save(); go('home'); };
+  $('askInput').addEventListener('input', e => { query = e.target.value.trim(); renderHome(); });
+  $('askInput').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
 
   function saveNew(song) {
-    if (pendingAdd) { song.title = pendingAdd.title; song.composer = pendingAdd.cat === 'mine' ? song.composer : pendingAdd.artist; song.cat = pendingAdd.cat; }
-    D.mine.push(song); Store.save(); pendingAdd = null;
+    D.mine.push(song); Store.save();
     toast('השיר נוסף! 🎉', 1800); openSong(song.id);
   }
   $('midiFile').addEventListener('change', async e => {
@@ -130,12 +121,11 @@
       catch (err) { toast(err.message || 'לא הצלחתי לקרוא את הקובץ', 2500); }
       return;
     }
-    // כמה קבצים בבת אחת: כל קובץ נהיה שיר, בקטגוריה שממנה נכנסנו
-    let ok = 0; const cat = pendingAdd ? pendingAdd.cat : 'mine';
+    let ok = 0;
     for (const [k, f] of files.entries()) {
-      try { const sg = MidiFile.parse(await f.arrayBuffer(), nameOf(f)); sg.id += '_' + k; sg.cat = cat; D.mine.push(sg); ok++; } catch (err) { /* מדלגים על קובץ לא תקין */ }
+      try { const sg = MidiFile.parse(await f.arrayBuffer(), nameOf(f)); sg.id += '_' + k; sg.cat = 'mine'; D.mine.push(sg); ok++; } catch (err) { /* מדלגים על קובץ לא תקין */ }
     }
-    Store.save(); pendingAdd = null; toast(`נוספו ${ok} שירים 🎉`, 2200); go('home');
+    Store.save(); toast(`נוספו ${ok} שירים 🎉`, 2200); catFilter = 'mine'; go('home');
   });
   async function startRecord() {
     Snd.unlock(); await ensureMic();
@@ -145,25 +135,28 @@
   function endRecord() {
     recording = false;
     const raw = Game.recorded(); Game.stop();
-    if (raw.length < 4) { toast('לא הוקלטו מספיק תווים', 2000); return go(pendingAdd ? 'add' : 'home'); }
-    const title = pendingAdd ? pendingAdd.title : (prompt('איך קוראים לשיר?', 'השיר שלי') || 'השיר שלי');
+    if (raw.length < 4) { toast('לא הוקלטו מספיק תווים', 2000); return go('home'); }
+    const title = prompt('איך קוראים לשיר?', 'השיר שלי') || 'השיר שלי';
     saveNew({ id: 'mine_' + Date.now(), title, composer: 'הקלטה שלי', cat: 'mine', level: 3, bpm: 120, beats: 4, raw });
   }
 
   // ---------- מסך שיר ----------
   function openSong(id) {
     curSong = allSongs().find(s => s.id === id); if (!curSong) return;
+    D.last = id; Store.save();
     const arrs = Music.arrangements(curSong);
     if (!arrs.some(a => a[0] === arr)) arr = arrs[0][0];
     $('sgTitle').textContent = curSong.title; $('sgComposer').textContent = curSong.composer || '';
+    $('sgCover').outerHTML = coverHtml(curSong, true).replace('<div class="cover big"', '<div id="sgCover" class="cover big"');
     const p = D.prog[id] || {};
-    $('sgStars').innerHTML = `<span>🐢 ${starHtml(p.wait || 0)}</span><span>🎮 ${starHtml(p.play || 0)}</span>`;
+    $('sgStars').innerHTML = `<span title="לימוד">🐢 ${starHtml(p.wait || 0)}</span><span title="משחק">🎮 ${starHtml(p.play || 0)}</span>`;
     $('sgArr').innerHTML = arrs.map(([k, n]) => `<button class="chip ${k === arr ? 'sel' : ''}" data-arr="${k}">${n}</button>`).join('');
+    document.querySelectorAll('#sgSpeed [data-tempo]').forEach(b => b.classList.toggle('sel', Math.abs(b.dataset.tempo - tempo) < 0.01));
     $('sgDelete').hidden = !D.mine.includes(curSong);
     go('song');
   }
   $('sgArr').addEventListener('click', e => { const b = e.target.closest('[data-arr]'); if (b) { arr = b.dataset.arr; openSong(curSong.id); } });
-  $('sgTempo').addEventListener('input', e => { tempo = e.target.value / 100; $('sgTempoVal').textContent = e.target.value + '%'; });
+  $('sgSpeed').addEventListener('click', e => { const b = e.target.closest('[data-tempo]'); if (!b) return; tempo = +b.dataset.tempo; document.querySelectorAll('#sgSpeed [data-tempo]').forEach(x => x.classList.toggle('sel', x === b)); });
   $('sgDelete').onclick = () => { if (confirm('למחוק את השיר?')) { D.mine = D.mine.filter(s => s !== curSong); delete D.prog[curSong.id]; Store.save(); go('home'); } };
   document.querySelector('#scr-song .modes').addEventListener('click', async e => {
     const b = e.target.closest('[data-mode]'); if (!b) return;
@@ -270,25 +263,30 @@
   function renderSettings() {
     const chk = (k, title, sub) => `<div class="set"><label class="r"><span>${title}</span><input type="checkbox" data-k="${k}" ${CFG[k] ? 'checked' : ''}></label>${sub ? `<small>${sub}</small>` : ''}</div>`;
     $('setBody').innerHTML =
-      `<div class="set"><div class="r"><span>שמות התווים</span><select data-k="names"><option value="sol">דו רה מי</option><option value="letters">C D E</option></select></div></div>` +
-      chk('mic', '🎤 האזנה לפסנתר במיקרופון', 'האפליקציה שומעת את הנגינה ובודקת אותה. שימי את המכשיר קרוב לרמקול של האורגנית.') +
+      `<h3 class="sec">🎤 ההאזנה לאורגנית</h3>` +
+      chk('mic', 'האזנה במיקרופון', 'האפליקציה שומעת את הנגינה ובודקת אותה. כדאי לשים את המכשיר קרוב לרמקול של האורגנית.') +
       `<div class="set"><div id="micNote">—</div><div class="meter"><i id="micLvl"></i></div>
-        <small>נגני תו אחד — השם שלו אמור להופיע למעלה. דיבור ורעשי רקע לא אמורים להופיע.</small>
+        <small>נגני תו אחד — השם שלו יופיע כאן. דיבור ורעשי רקע לא אמורים להופיע.</small>
         <div class="btns"><button class="btn" id="setCal">🎯 בדיקת האזנה (חצי דקה)</button></div>
         <small id="calInfo">${D.cal ? `בדיקה אחרונה: זוהו ${D.cal.ok} מתוך ${D.cal.total} קלידים. ${esc(D.cal.note || '')}` : 'מומלץ לעשות פעם אחת: האפליקציה מבקשת 8 קלידים ובודקת שהיא שומעת כל אחד.'}</small></div>` +
+      `<h3 class="sec">🎨 תצוגה וצלילים</h3>` +
+      `<div class="set"><div class="r"><span>שמות התווים</span><select data-k="names"><option value="sol">דו רה מי</option><option value="letters">C D E</option></select></div></div>` +
+      chk('staff', 'חמשה עם תווים מעל השיר') + chk('metro', 'מטרונום (תקתוק קצב)') +
+      chk('backing', 'ליווי אוטומטי', 'האפליקציה מנגנת את היד שאת לא מנגנת. כבוי אוטומטית כשהמיקרופון פעיל.') +
+      `<h3 class="sec">👨‍👩‍👧 להורים</h3>` +
+      `<div class="set"><div class="r"><span>🎙️ הקלטות לכיוונון</span><button class="btn ghost" data-go="samples">פתיחה</button></div>
+        <small id="sampleInfo">מקליטים את האורגנית האמיתית (קלידים, אקורדים, רעשי רקע), שומרים ושולחים — כדי לכוונן את ההאזנה בדיוק אליה.</small></div>` +
+      `<div class="set"><div class="r"><span>📂 הוספת שירים מקובצי MIDI</span><button class="btn ghost" id="setMidi">בחירת קבצים</button></div><small>אפשר לבחור הרבה קבצים בבת אחת. הם נשמרים רק במכשיר הזה, בקטגוריה "השירים שלי".</small></div>` +
       `<div class="set"><div class="r"><span>פיצוי השהיה (מתכוונן לבד)</span><b>${CFG.latency} אלפיות שנייה</b></div>
         <input type="range" data-k="latency" min="0" max="300" step="10" value="${CFG.latency}">
         <div class="r"><span>כיוון הכלי שנלמד</span><b>${(CFG.tune || 0) > 0 ? '+' : ''}${Math.round(CFG.tune || 0)} סנט</b></div></div>` +
-      `<div class="set"><div class="r"><span>🎙️ הקלטות לכיוונון</span><button class="btn ghost" data-go="samples">פתיחה</button></div>
-        <small id="sampleInfo">להורים: מקליטים כאן את האורגנית האמיתית (קלידים, אקורדים, רעשי רקע), שומרים ושולחים — כדי לכוונן את ההאזנה בדיוק אליה.</small></div>` +
-      `<div class="set"><div class="r"><span>🎹 חיבור MIDI</span><b>${Input.midi.ok ? esc(Input.midi.devices.join(', ')) : navigator.requestMIDIAccess ? 'לא מחובר' : 'לא נתמך בדפדפן הזה'}</b></div><small>חיבור האורגנית בכבל USB נותן את הזיהוי המדויק ביותר (נתמך בכרום במחשב ובאנדרואיד).</small></div>` +
-      chk('backing', 'ליווי אוטומטי', 'האפליקציה מנגנת את היד שאת לא מנגנת. כבוי אוטומטית כשהמיקרופון פעיל.') +
-      chk('metro', 'מטרונום') + chk('staff', 'הצגת חמשה עם תווים') +
-      `<div class="set"><small>📱 להתקנה כאפליקציה: בספארי לחצי על "שיתוף" ← "הוסף למסך הבית".</small></div>` +
+      `<div class="set"><div class="r"><span>🎹 חיבור MIDI</span><b>${Input.midi.ok ? esc(Input.midi.devices.join(', ')) : navigator.requestMIDIAccess ? 'לא מחובר' : 'לא נתמך בדפדפן הזה'}</b></div><small>אורגנית עם יציאת USB נותנת את הזיהוי המדויק ביותר (בכרום במחשב ובאנדרואיד).</small></div>` +
+      `<div class="set"><small>📱 להתקנה כאפליקציה במסך מלא: בספארי "שיתוף" ← "הוסף למסך הבית".</small></div>` +
       `<button class="link danger" id="setReset">איפוס כל ההתקדמות</button>`;
     $('setBody').querySelector('[data-k=names]').value = CFG.names;
     $('setReset').onclick = () => { if (confirm('לאפס כוכבים, ניקוד ורצף? (השירים שהוספת יישארו)')) { D.prog = {}; D.xp = 0; D.streak = { last: '', n: 0 }; D.chordBest = 0; Store.save(); toast('אופס'); } };
     $('setCal').onclick = () => startCal();
+    $('setMidi').onclick = () => $('midiFile').click();
     Samples.count().then(n => { const el = $('sampleInfo'); if (el && n) el.textContent = n === 1 ? 'הקלטה אחת שמורה במכשיר.' : `${n} הקלטות שמורות במכשיר.`; }).catch(() => {});
     ensureMic();
     const st = CFG.names === 'letters' ? 'letters' : 'sol';
@@ -315,13 +313,14 @@
   async function startCal() {
     goFull(); Snd.unlock(); await ensureMic();
     if (!Input.micOn) return;
+    Input.resetRef();
     calMode = true; go('game'); gameHud('wait');
     Game.start(CAL_SONG, {
       mode: 'wait', arr: 'rh', tempo: 1, banner: 'נגני את הקליד המסומן (⏭ לדילוג)',
       onFinish: s => {
         calMode = false;
         const ok = s.perfect + s.ok + s.good, pk = Input.mic.peak;
-        const note = pk > 0.97 ? 'הצליל חזק מדי למיקרופון — כדאי להרחיק מעט את המכשיר או להנמיך.' : pk < 0.02 ? 'הצליל חלש — כדאי לקרב את המכשיר לרמקול או להגביר.' : '';
+        const note = pk > 0.93 ? 'הצליל חזק מדי למיקרופון — כדאי להרחיק מעט את המכשיר או להנמיך.' : pk < 0.02 ? 'הצליל חלש — כדאי לקרב את המכשיר לרמקול או להגביר.' : '';
         D.cal = { ok, total: s.total, note, date: Date.now() }; Store.save(); Input.syncTune();
         Snd.chime(ok >= s.total - 1);
         toast(ok >= s.total - 1 ? `🎤 ההאזנה עובדת מצוין (${ok}/${s.total})` : `זוהו ${ok} מתוך ${s.total} קלידים. ${note || 'נסי לקרב את המכשיר לרמקול.'}`, 4500);
@@ -338,7 +337,12 @@
     if (inFs() || standalone()) return true;
     const rq = fsEl.requestFullscreen || fsEl.webkitRequestFullscreen;
     if (!rq) return false;
-    try { const r = rq.call(fsEl, { navigationUI: 'hide' }); if (r && r.catch) r.catch(() => {}); } catch (e) { return false; }
+    try {
+      const r = rq.call(fsEl, { navigationUI: 'hide' });
+      // במסך מלא (אנדרואיד) נועלים לרוחב — כך רואים יותר קלידים
+      const lock = () => { try { const p = screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape'); if (p && p.catch) p.catch(() => {}); } catch (e) { /* לא נתמך */ } };
+      if (r && r.then) r.then(lock, () => {}); else lock();
+    } catch (e) { return false; }
     return true;
   }
   $('fsBtn').onclick = () => {

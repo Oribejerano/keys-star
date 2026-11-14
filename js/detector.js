@@ -46,7 +46,10 @@
     this.ring2 = []; for (let i = 0; i < 16; i++) this.ring2.push(new Float32Array(this.max2 + 2));
     this.ring2T = new Float64Array(16).fill(-1e9); this.ring2I = 0;
     this.pf2 = new Float32Array(128); this.pa2 = new Float32Array(128); this.pu2 = new Uint8Array(128);
-    this.fastOn = opt.fast == null ? 1 : opt.fast; this.fastNeed = opt.fastNeed || 2; this.fastExpl = opt.fastExpl || 0.7; this.fastSeen = new Uint8Array(128); this.fastT = new Float64Array(128).fill(-1e9);
+    this.fastOn = opt.fast == null ? 1 : opt.fast; this.fastNeed = opt.fastNeed || 2; this.fastExpl = opt.fastExpl || 0.7; this.fast2 = opt.fast2 == null ? 1 : opt.fast2; this.fastSeen = new Uint8Array(128); this.fastT = new Float64Array(128).fill(-1e9);
+    // הקשחה מול דיבור (כויל על הקלטות אמיתיות): תו צפוי חייב להסביר את רוב מה שנשמע, להיות מכוון, ולא חלש בהרבה מהנגינה הרגילה
+    this.exExpl = opt.exExpl == null ? 0.62 : opt.exExpl; this.exDev = opt.exDev || 20; this.quietK = opt.quietK == null ? 0.55 : opt.quietK; this.lowFund = opt.lowFund || 55;
+    this.subOct = opt.subOct == null ? 0.3 : opt.subOct; this.ref = opt.ref || 0; this.emitT = new Float64Array(128).fill(-1e9); this.ringMs = opt.ringMs == null ? 1500 : opt.ringMs; this.quiet = false; this.pu = new Uint8Array(256); this.explAll = 1;
     this.frames = 0; this.lastT = null; this.level = 0; this.peak = 0;
     this.present = [];
   }
@@ -85,7 +88,7 @@
     if (best < 0) return 0;
     const tol = Math.max(f * tolRatio, 0.45 * this.binHz);
     if (bd > tol) return 0;
-    this.mf = pf[best];
+    this.mf = pf[best]; this.mi = best;
     return this.pa[best];
   };
 
@@ -113,7 +116,7 @@
       let me = 0, md = 0;
       for (let k = 2; k < 10; k++) { const q = (this.blkI - k + 20) % 10; if (E[q] > me) me = E[q]; if (D[q] > md) md = D[q]; }
       const tb = t - (N - i0) / sr * 1000;
-      if ((e > this.atkK * me + 1e-9 || dd > this.atkK * md + 1e-10) && tb - this.attackT > 45) { this.attackT = tb; this.atk[this.atkI] = tb; this.atkI = (this.atkI + 1) % 8; }
+      if ((e > this.atkK * me + 1e-9 || dd > this.atkK * md + 1e-10) && tb - this.attackT > 45) { this.attackT = tb; this.atkR = Math.max(e / (me + 1e-9), dd / (md + 1e-10)); this.atkE = e; this.atk[this.atkI] = tb; this.atkI = (this.atkI + 1) % 8; }
       E[this.blkI] = e; D[this.blkI] = dd; this.blkI = (this.blkI + 1) % 10;
     }
     this.carry = N - i0;
@@ -134,7 +137,7 @@
     let prev = null, bestAge = 1e9;
     for (let i = 0; i < 16; i++) { const age = t - this.ring2T[i]; if (age >= 28 && age <= 70 && Math.abs(age - 42) < bestAge) { bestAge = Math.abs(age - 42); prev = this.ring2[i]; } }
     this.ring2T[this.ring2I] = t; this.ring2I = (this.ring2I + 1) % 16;
-    if (!prev || !expected || !expected.size || t - this.attackT > 90) { this.fastSeen.fill(0); return; }
+    if (!prev || !expected || !expected.size || t - this.attackT > 90 || this.quiet) { this.fastSeen.fill(0); return; }
     // פסגות ש"עלו" עכשיו
     const pf = this.pf2, pa = this.pa2, pu = this.pu2, tmp = this.tmp; let np = 0, total = 0, maxA = 0;
     const kLo = Math.max(3, Math.ceil(420 / bin2));
@@ -152,27 +155,41 @@
     let q = 0; for (let i = 0; i < np; i++) if (pa[i] >= 0.08 * maxA) { pf[q] = pf[i]; pa[q] = pa[i]; pu[q] = 0; total += pa[i]; q++; }
     np = q;
     if (np < 2) { this.fastSeen.fill(0); return; }
-    const cand = [];
+    const cand = []; let weak = false;
     for (const n of expected) {
       if (n < LO || n > HI || t - this.lastOn[n] < 200) continue;
-      const f0 = this.F[n] * this.tuneR; let avail = 0, mc = 0, odd = 0, oddAvail = 0;
+      const f0 = this.F[n] * this.tuneR; let avail = 0, mc = 0, odd = 0, oddAvail = 0, low2 = 0;
       for (let h = 1; h <= 14 && avail < 6; h++) {
         const fh = f0 * h * (1 + 0.00008 * h * h); if (fh < 420) continue; if (fh > 5200) break;
         avail++; if (h & 1) oddAvail++;
         const tol = Math.max(fh * 0.02, 0.35 * bin2);
         let bi = -1, bd = tol; for (let i = 0; i < np; i++) { const d = Math.abs(pf[i] - fh); if (d <= bd) { bd = d; bi = i; } }
-        if (bi >= 0) { mc++; if (h & 1) odd++; pu[bi] = 1; }
+        if (bi >= 0) { mc++; if (h & 1) odd++; if (avail <= 2) low2++; pu[bi] = 1; }
       }
-      if (mc >= 2 && (mc >= 3 || avail <= 3) && (oddAvail === 0 || odd >= 1)) cand.push(n);
+      // צליל עם שתי הרמוניות בלבד (יסוד + אוקטבה): מתקבל רק אם הן מסבירות כמעט את כל מה שעלה
+      const two = mc === 2 && avail > 3 && low2 === 2 && this.fast2;
+      if (!(mc >= 2 && (mc >= 3 || avail <= 3 || two) && (oddAvail === 0 || odd >= 1))) continue;
+      if (two) weak = true;
+      // האם בעצם הוקש הקליד שאוקטבה מתחת? אז גם היסוד שלו (חצי תדר) עלה עכשיו, ובעוצמה דומה
+      if (this.subOct && !expected.has(n - 12)) {
+        const kh = Math.round(f0 / 2 / bin2), k1 = Math.round(f0 / bin2);
+        if (kh >= 4) {
+          const sub = Math.max(cur[kh - 1], cur[kh], cur[kh + 1]), subP = Math.max(prev[kh - 1], prev[kh], prev[kh + 1]), a0 = Math.max(cur[k1 - 1], cur[k1], cur[k1 + 1]);
+          if (sub >= this.subOct * a0 && sub >= 1.6 * subP) continue;
+        }
+      }
+      cand.push(n);
     }
     let expl = 0; for (let i = 0; i < np; i++) if (pu[i]) expl += pa[i];
-    if (!cand.length || expl < this.fastExpl * total) { this.fastSeen.fill(0); return; }
+    if (!cand.length || expl < (weak ? 0.95 : this.fastExpl) * total) { this.fastSeen.fill(0); return; }
     for (const n of cand) {
       if (t - this.fastT[n] > 14) this.fastSeen[n] = 0;
       this.fastT[n] = t;
       if (++this.fastSeen[n] < this.fastNeed) continue;
       this.fastSeen[n] = 0; this.on[n] = 1; this.goneT[n] = 0;
-      this.lastOn[n] = t + 40; this.atkOn[n] = this.attackT; // המסלול הרגיל לא ידווח שוב על אותה הקשה
+      this.lastOn[n] = t + 40; this.atkOn[n] = this.attackT; this.emitT[n] = t; // המסלול הרגיל לא ידווח שוב על אותה הקשה
+      if (this.dbg) this.dbg({ n, t, fast: 1, atkR: Math.min(99, this.atkR), expl: expl / total, np, age: t - this.attackT, lvl: this.level, maxA, nc: cand.length });
+      if (this.level > this.ref) this.ref = this.ref ? this.ref + 0.3 * (this.level - this.ref) : this.level;
       events.push({ type: 'on', midi: n, ghost: false, t0: this.attackT, fast: true });
     }
   };
@@ -191,6 +208,7 @@
 
     let s = 0; for (let i = N - 1024; i < N; i++) s += x[i] * x[i];
     this.level = Math.sqrt(s / 1024);
+    this.quiet = this.ref > 0 && this.level < this.quietK * this.ref; // חלש בהרבה מהנגינה הרגילה: כנראה דיבור או רעש
     this.attacks(x, t, newSamples);
     if (this.fastOn) this.fast(x, t, expected, events);
 
@@ -247,9 +265,21 @@
       strict[n] = st ? 1 : 0;
       const ex = expected && expected.has(n);
       // תו שהמשחק מצפה לו מתקבל גם בלי יסוד (רמקול קטן) או עם יסוד בלבד
-      pres[n] = st || (ex && ((a2 > 0 && a3 > 0) || (a1 >= 0.1 * maxAmp && a1 > 0 && n >= 60))) ? 1 : 0;
+      // תו צפוי מתקבל גם בלי יסוד רק בקלידים הנמוכים (רמקול קטן), ועם יסוד בלבד רק בקלידים הגבוהים כשהוא הפסגה הבולטת
+      pres[n] = st || (ex && ((n < this.lowFund && a2 > 0 && a3 > 0) || (n >= 76 && a1 >= 0.5 * maxAmp && a1 > 0))) ? 1 : 0;
       if (pres[n] && fullE[n] > maxE) maxE = fullE[n];
     }
+
+    // כמה ממה שנשמע עכשיו מוסבר על ידי התווים הצפויים והתווים שכבר מצלצלים? בנגינה — כמעט הכול; בדיבור — מעט
+    if (expected && expected.size && np) {
+      const pu = this.pu, tol2 = Math.pow(2, 18 / 1200) - 1; let sum = 0, ex2 = 0;
+      for (let i = 0; i < np; i++) { pu[i] = 0; sum += pa[i]; }
+      const mark = n => { const f0 = F[n] * tuneR; for (let h = 1; h <= 8; h++) { const fh = f0 * h * (1 + 0.00008 * h * h); if (fh > 5400) break; if (this.match(fh, tol2)) pu[this.mi] = 1; } };
+      for (const n of expected) if (n >= LO && n <= HI) mark(n);
+      for (let n = LO; n <= HI; n++) if ((this.on[n] || t - this.emitT[n] < this.ringMs) && !expected.has(n)) mark(n); // גם תווים שזוהו לאחרונה ועדיין מהדהדים
+      for (let i = 0; i < np; i++) if (pu[i]) ex2 += pa[i];
+      this.explAll = ex2 / sum;
+    } else this.explAll = 1;
 
     // הקשה = עלייה באנרגיית התו מעל המעטפת האחרונה שלו. אם התו כבר מצלצל, נדרשת גם נקישה אמיתית
     // באותו רגע — כך צליל שמתנדנד (כורוס, רעד, הגבר אוטומטי) לא נחשב הקשה חדשה.
@@ -313,9 +343,13 @@
       const noFund = ex && A1[n] === 0 && n < 60;
       const rT = noFund ? this.riseFT[n] : this.riseT[n], r0 = noFund ? this.riseF0[n] : this.rise0[n];
       if (t - rT > 260 || rT <= this.lastOn[n] + 120 || t - this.lastOn[n] < 200) continue; // אין הקשה חדשה
-      if (this.seen[n] < 2 || t - this.since[n] < (ex ? 12 : 80)) continue;
-      if (!ex && !(strict[n] && fullE[n] >= 0.2 * maxE && A1[n] >= 0.12 * maxAmp && (cntA[n] >= 3 || n >= 79))) continue;
-      if (A1[n] > 0 && (!ex || expected.size === 1) && this.voiceLike(F[n] * tuneR * Math.pow(2, this.dev[n] / 1200), A1[n])) { this.seen[n] = 0; continue; }
+      // צליל חלש בהרבה מהנגינה הרגילה נבדק כמו תו לא צפוי: לאט ובקפדנות
+      const lax = ex && !this.quiet;
+      if (this.seen[n] < 2 || t - this.since[n] < (lax ? 12 : 80)) continue;
+      if (!lax && !(strict[n] && fullE[n] >= 0.2 * maxE && A1[n] >= 0.12 * maxAmp && (cntA[n] >= 3 || n >= 79))) continue;
+      if (!ex && this.quiet) continue;
+      if (ex && (this.explAll < this.exExpl || (A1[n] > 0 && Math.abs(this.dev[n]) > this.exDev))) continue;
+      if (A1[n] > 0 && (!lax || expected.size === 1) && this.voiceLike(F[n] * tuneR * Math.pow(2, this.dev[n] / 1200), A1[n])) { this.seen[n] = 0; continue; }
       // האם זו רק הרמוניה של תו נמוך יותר שהוקש באותו רגע בדיוק?
       let low = -1;
       for (let r = 0; r < REL.length; r++) {
@@ -331,8 +365,16 @@
       let best = -1e9;
       for (let k = 0; k < 8; k++) { const ak = this.atk[k]; if (ak >= r0 - 150 && ak <= r0 + 15 && ak > best) best = ak; }
       const t0 = best > -1e8 ? best : r0 - 45;
-      this.on[n] = 1;
+      this.on[n] = 1; this.emitT[n] = t;
+      if (this.dbg && ex) { // נתוני פיתוח: מאפייני הזיהוי, לכיוונון מול הקלטות אמיתיות
+        let sp = 0; for (let i = 0; i < np; i++) sp += pa[i];
+        const a1 = A1[n], hs = a1 + A[2][n] + A[3][n] + A[4][n] + A[5][n];
+        this.dbg({ n, t, fast: 0, a1max: a1 / maxAmp, a2a1: a1 ? A[2][n] / a1 : 9, a3a1: a1 ? A[3][n] / a1 : 9, cnt: cntA[n], strict: strict[n], dev: Math.abs(this.dev[n]), dr: this.dHi[n] - this.dLo[n],
+          seen: this.seen[n], since: t - this.since[n], fE: fullE[n] / maxE, lvl: this.level, atk: Math.min(999, t - this.attackT), voice: a1 ? +this.voiceLike(F[n] * tuneR * Math.pow(2, this.dev[n] / 1200), a1) : 0, np, expl: hs / sp, maxAmp, explAll: this.explAll, quiet: +this.quiet });
+      }
       events.push({ type: 'on', midi: n, ghost: low >= 0, t0: t0 });
+      // עוצמת הנגינה הרגילה: נלמדת מתווים צפויים שזוהו בבירור (עולה מהר, יורדת לאט)
+      if (ex && strict[n] && low < 0) this.ref = this.ref ? this.ref + (this.level > this.ref ? 0.3 : this.quiet ? 0.2 : 0.08) * (this.level - this.ref) : this.level;
       // כיוון עדין: לומדים בהדרגה כמה הכלי גבוה/נמוך מהכיוון התקני
       if (ex && strict[n] && cntA[n] >= 3 && Math.abs(this.dev[n]) < 25) {
         this.tune = Math.max(-40, Math.min(40, this.tune + 0.04 * this.dev[n])); this.tuneR = Math.pow(2, this.tune / 1200);

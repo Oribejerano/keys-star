@@ -186,7 +186,7 @@ const Samples = (() => {
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
     await refresh();
     Snd.chime(true);
-    const pk = meta.peak > 0.97 ? ' · הצליל חזק מדי למיקרופון' : meta.peak < 0.02 ? ' · הצליל חלש מאוד' : '';
+    const pk = meta.peak > 0.93 ? ' · הצליל חזק מדי למיקרופון — כדאי להרחיק מעט את המכשיר' : meta.peak < 0.02 ? ' · הצליל חלש מאוד' : '';
     toast((r.kind === 'noise' ? `נשמר ✓ זיהויי שווא: ${score.extra}` : score.total ? `נשמר ✓ זוהו בזמן אמת ${score.ok} מתוך ${score.total}` : 'ההקלטה נשמרה ✓') + pk, 3500);
   }
 
