@@ -111,12 +111,15 @@ function render(groups, o) {
 
 // מריץ את המנוע על הקלטה. expectedFn(tSec) → Set או null. מחזיר אירועי "תו נוגן"
 function run(buf, sr, expectedFn, hopMs = 10, opt) {
-  const det = new Detector(sr, opt), N = det.N, hop = Math.round(sr * hopMs / 1000), frame = new Float32Array(N), ev = [];
+  const h5 = !opt || opt.hop5 !== 0; // כמו באפליקציה: דופק כל 5 אלפיות שנייה, ניתוח מלא כל דופק שני
+  if (h5) hopMs = 5;
+  const det = new Detector(sr, opt), N = det.N, hop = Math.round(sr * hopMs / 1000), frame = new Float32Array(N), ev = []; let fi = 0;
   for (let p = hop; p <= buf.length; p += hop) {
     const st = p - N;
     if (st >= 0) frame.set(buf.subarray(st, p)); else { frame.fill(0); frame.set(buf.subarray(0, p), -st); }
     const tSec = p / sr;
-    for (const e of det.process(frame, tSec * 1000, expectedFn ? expectedFn(tSec) : null, hop)) if (e.type === 'on') ev.push({ t: tSec, midi: e.midi, ghost: e.ghost, t0: e.t0 / 1000 });
+    const fastOnly = h5 && (fi++ & 1) === 0;
+    for (const e of det.process(frame, tSec * 1000, expectedFn ? expectedFn(tSec) : null, hop, fastOnly)) if (e.type === 'on') ev.push({ t: tSec, midi: e.midi, ghost: e.ghost, t0: e.t0 / 1000 });
   }
   ev.det = det;
   return ev;
@@ -139,10 +142,10 @@ function evalGuided(groups, buf, sr, opt) { // כמו במשחק: המנוע י�
   for (let k = 0; k < ev.length; k++) if (!used.has(k) && !ev[k].ghost) { if (sounding(ev[k].t, ev[k].midi)) dbl++; else wrong++; }
   return { recall: hit / Math.max(1, tot), wrong, dbl, tot, lat: lat / Math.max(1, hit), terr: terr / Math.max(1, hit), tbias: tbias / Math.max(1, hit), missed, tune: ev.det.tune };
 }
-function evalImpostor(groups, buf, sr, shifts) { // המשחק מצפה לתו אחר ממה שנוגן — כמה פעמים הוא "מתקבל" בטעות?
+function evalImpostor(groups, buf, sr, shifts, opt) { // המשחק מצפה לתו אחר ממה שנוגן — כמה פעמים הוא "מתקבל" בטעות?
   const res = {};
   for (const sh of shifts) {
-    const ev = run(buf, sr, expectedAt(groups, sh)); let acc = 0, tot = 0;
+    const ev = run(buf, sr, expectedAt(groups, sh), 10, opt); let acc = 0, tot = 0;
     for (let gi = 0; gi < groups.length; gi++) { const g = groups[gi], end = gi + 1 < groups.length ? groups[gi + 1].t - 0.15 : g.t + 1;
       for (const m of g.notes) { if (g.notes.includes(m + sh)) continue; tot++; if (ev.some(e => e.midi === m + sh && e.t >= g.t - 0.15 && e.t <= end)) acc++; } }
     res[sh] = acc / Math.max(1, tot);
@@ -166,7 +169,7 @@ const scen = [
   ['נגינה חלשה מאוד (מרחוק)', R => melody(R, 40, 60, 84, 0.3, 0.6), { snr: 12, gain: 0.01, reverb: 1 }],
   ['כלי מכוון 20 סנט גבוה', R => melody(R, 40, 60, 84, 0.3, 0.6), { snr: 25, reverb: 1, detune: 20 }],
 ];
-module.exports = { melody, chordsAndMelody, render, run, rng, expectedAt, evalGuided, evalFree, scen };
+module.exports = { melody, chordsAndMelody, render, run, rng, expectedAt, evalGuided, evalFree, evalImpostor, scen };
 if (require.main !== module) return;
 
 const verbose = process.argv.includes('-v'), quick = process.argv.includes('-q');

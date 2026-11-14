@@ -16,14 +16,8 @@
     this.sr = sr;
     const N = this.N = sr > 30000 ? 8192 : 4096;
     // חלון א-סימטרי: עולה לאט על הדגימות הישנות ויורד מהר על החדשות — תו חדש "נראה" מוקדם יותר
-    const Lr = Math.round(N * (opt.asym == null ? 0.72 : opt.asym)), Lf = N - Lr;
-    this.win = new Float32Array(N);
-    for (let i = 0; i < N; i++) this.win[i] = i < Lr ? 0.5 - 0.5 * Math.cos(Math.PI * i / Lr) : 0.5 + 0.5 * Math.cos(Math.PI * (i - Lr) / Lf);
-    this.rev = new Uint16Array(N);
-    const bits = Math.log2(N);
-    for (let i = 0; i < N; i++) { let r = 0; for (let b = 0; b < bits; b++) r |= ((i >> b) & 1) << (bits - 1 - b); this.rev[i] = r; }
-    this.cos = new Float32Array(N / 2); this.sin = new Float32Array(N / 2);
-    for (let i = 0; i < N / 2; i++) { this.cos[i] = Math.cos(2 * Math.PI * i / N); this.sin[i] = Math.sin(2 * Math.PI * i / N); }
+    this.win = asymWindow(N, opt.asym == null ? 0.72 : opt.asym);
+    this.fft = makeFFT(N);
     this.re = new Float32Array(N); this.im = new Float32Array(N);
     this.binHz = sr / N;
     this.maxBin = Math.min(N / 2 - 2, Math.ceil(5600 / this.binHz));
@@ -45,24 +39,41 @@
     // גלאי נקישות (בזמן, לא בתדר)
     this.blk = Math.max(64, Math.round(sr * 0.005)); this.blkE = new Float32Array(10); this.blkD = new Float32Array(10); this.atkK = opt.atkK || 1.5; this.guard = opt.guard == null ? 1 : opt.guard; this.blkI = 0; this.carry = 0;
     this.atk = new Float64Array(8).fill(-1e9); this.atkI = 0; this.attackT = -1e9;
+    // מסלול מהיר: חלון קצר (כ-43 אלפיות שנייה) על התדרים שמעל 420Hz, רק לתווים שהמשחק מצפה להם
+    const N2 = this.N2 = N / 4;
+    this.win2 = asymWindow(N2, 0.65); this.fft2 = makeFFT(N2); this.re2 = new Float32Array(N2); this.im2 = new Float32Array(N2);
+    this.bin2 = sr / N2; this.max2 = Math.min(N2 / 2 - 2, Math.ceil(5400 / this.bin2));
+    this.ring2 = []; for (let i = 0; i < 16; i++) this.ring2.push(new Float32Array(this.max2 + 2));
+    this.ring2T = new Float64Array(16).fill(-1e9); this.ring2I = 0;
+    this.pf2 = new Float32Array(128); this.pa2 = new Float32Array(128); this.pu2 = new Uint8Array(128);
+    this.fastOn = opt.fast == null ? 1 : opt.fast; this.fastNeed = opt.fastNeed || 2; this.fastExpl = opt.fastExpl || 0.7; this.fastSeen = new Uint8Array(128); this.fastT = new Float64Array(128).fill(-1e9);
     this.frames = 0; this.lastT = null; this.level = 0; this.peak = 0;
     this.present = [];
   }
 
-  Detector.prototype.fft = function () {
-    const N = this.N, re = this.re, im = this.im, rev = this.rev, cs = this.cos, sn = this.sin;
-    for (let i = 0; i < N; i++) { const j = rev[i]; if (j > i) { const t = re[i]; re[i] = re[j]; re[j] = t; } }
-    for (let len = 2; len <= N; len <<= 1) {
-      const half = len >> 1, step = N / len;
-      for (let i = 0; i < N; i += len) {
-        for (let j = 0, k = 0; j < half; j++, k += step) {
-          const wr = cs[k], wi = -sn[k], a = i + j, b = a + half;
-          const xr = re[b] * wr - im[b] * wi, xi = re[b] * wi + im[b] * wr;
-          re[b] = re[a] - xr; im[b] = im[a] - xi; re[a] += xr; im[a] += xi;
+  function makeFFT(N) {
+    const rev = new Uint16Array(N), bits = Math.log2(N), cs = new Float32Array(N / 2), sn = new Float32Array(N / 2);
+    for (let i = 0; i < N; i++) { let r = 0; for (let b = 0; b < bits; b++) r |= ((i >> b) & 1) << (bits - 1 - b); rev[i] = r; }
+    for (let i = 0; i < N / 2; i++) { cs[i] = Math.cos(2 * Math.PI * i / N); sn[i] = Math.sin(2 * Math.PI * i / N); }
+    return function (re, im) {
+      for (let i = 0; i < N; i++) { const j = rev[i]; if (j > i) { const t = re[i]; re[i] = re[j]; re[j] = t; } }
+      for (let len = 2; len <= N; len <<= 1) {
+        const half = len >> 1, step = N / len;
+        for (let i = 0; i < N; i += len) {
+          for (let j = 0, k = 0; j < half; j++, k += step) {
+            const wr = cs[k], wi = -sn[k], a = i + j, b = a + half;
+            const xr = re[b] * wr - im[b] * wi, xi = re[b] * wi + im[b] * wr;
+            re[b] = re[a] - xr; im[b] = im[a] - xi; re[a] += xr; im[a] += xi;
+          }
         }
       }
-    }
-  };
+    };
+  }
+  function asymWindow(N, frac) {
+    const Lr = Math.round(N * frac), Lf = N - Lr, w = new Float32Array(N);
+    for (let i = 0; i < N; i++) w[i] = i < Lr ? 0.5 - 0.5 * Math.cos(Math.PI * i / Lr) : 0.5 + 0.5 * Math.cos(Math.PI * (i - Lr) / Lf);
+    return w;
+  }
 
   // מחזיר את עוצמת הפסגה הקרובה לתדר f (0 אם אין פסגה מספיק מדויקת)
   Detector.prototype.match = function (f, tolRatio) {
@@ -109,22 +120,82 @@
     this.peak = pk;
   };
 
+  // מסלול מהיר לתווים צפויים. הרעיון: מיד אחרי נקישה, מסתכלים בחלון קצר רק על מה ש"עלה" עכשיו
+  // בספקטרום. אם כמעט כל מה שעלה הוא בדיוק ההרמוניות של תו צפוי (כולל הרמוניה אי-זוגית, כדי
+  // לא להתבלבל עם האוקטבה שמעל) — מאשרים אותו מיד, בלי לחכות לחלון הארוך והמדויק.
+  Detector.prototype.fast = function (x, t, expected, events) {
+    const N = this.N, N2 = this.N2, re = this.re2, im = this.im2, w = this.win2, max2 = this.max2, bin2 = this.bin2;
+    const off = N - N2;
+    for (let i = 0; i < N2; i++) { re[i] = x[off + i] * w[i]; im[i] = 0; }
+    this.fft2(re, im);
+    const cur = this.ring2[this.ring2I], sc = 4 / N2;
+    for (let k = 0; k <= max2 + 1; k++) cur[k] = Math.hypot(re[k], im[k]) * sc;
+    // הספקטרום מלפני כ-40 אלפיות שנייה — להשוואה
+    let prev = null, bestAge = 1e9;
+    for (let i = 0; i < 16; i++) { const age = t - this.ring2T[i]; if (age >= 28 && age <= 70 && Math.abs(age - 42) < bestAge) { bestAge = Math.abs(age - 42); prev = this.ring2[i]; } }
+    this.ring2T[this.ring2I] = t; this.ring2I = (this.ring2I + 1) % 16;
+    if (!prev || !expected || !expected.size || t - this.attackT > 90) { this.fastSeen.fill(0); return; }
+    // פסגות ש"עלו" עכשיו
+    const pf = this.pf2, pa = this.pa2, pu = this.pu2, tmp = this.tmp; let np = 0, total = 0, maxA = 0;
+    const kLo = Math.max(3, Math.ceil(420 / bin2));
+    for (let k = kLo; k <= max2 && np < 127; k++) {
+      const m = cur[k];
+      if (m <= cur[k - 1] || m < cur[k + 1] || m < 6e-5) continue;
+      if (m < 1.8 * Math.max(prev[k - 1], prev[k], prev[k + 1]) + 1e-6) continue;
+      let cn = 0; const lo = Math.max(1, k - 6), hi = Math.min(max2 + 1, k + 6);
+      for (let i = lo; i <= hi; i++) { if (i >= k - 1 && i <= k + 1) continue; const v = cur[i]; let j = cn++; while (j > 0 && tmp[j - 1] > v) { tmp[j] = tmp[j - 1]; j--; } tmp[j] = v; }
+      const half = cn >> 1; let lowSum = 0; for (let i = 0; i < half; i++) lowSum += tmp[i];
+      if (m < 4 * lowSum / half) continue;
+      const a = Math.log(cur[k - 1] + 1e-12), b = Math.log(m), c = Math.log(cur[k + 1] + 1e-12), den = a - 2 * b + c, p = den < 0 ? 0.5 * (a - c) / den : 0;
+      pf[np] = (k + p) * bin2; pa[np] = m; pu[np] = 0; if (m > maxA) maxA = m; np++;
+    }
+    let q = 0; for (let i = 0; i < np; i++) if (pa[i] >= 0.08 * maxA) { pf[q] = pf[i]; pa[q] = pa[i]; pu[q] = 0; total += pa[i]; q++; }
+    np = q;
+    if (np < 2) { this.fastSeen.fill(0); return; }
+    const cand = [];
+    for (const n of expected) {
+      if (n < LO || n > HI || t - this.lastOn[n] < 200) continue;
+      const f0 = this.F[n] * this.tuneR; let avail = 0, mc = 0, odd = 0, oddAvail = 0;
+      for (let h = 1; h <= 14 && avail < 6; h++) {
+        const fh = f0 * h * (1 + 0.00008 * h * h); if (fh < 420) continue; if (fh > 5200) break;
+        avail++; if (h & 1) oddAvail++;
+        const tol = Math.max(fh * 0.02, 0.35 * bin2);
+        let bi = -1, bd = tol; for (let i = 0; i < np; i++) { const d = Math.abs(pf[i] - fh); if (d <= bd) { bd = d; bi = i; } }
+        if (bi >= 0) { mc++; if (h & 1) odd++; pu[bi] = 1; }
+      }
+      if (mc >= 2 && (mc >= 3 || avail <= 3) && (oddAvail === 0 || odd >= 1)) cand.push(n);
+    }
+    let expl = 0; for (let i = 0; i < np; i++) if (pu[i]) expl += pa[i];
+    if (!cand.length || expl < this.fastExpl * total) { this.fastSeen.fill(0); return; }
+    for (const n of cand) {
+      if (t - this.fastT[n] > 14) this.fastSeen[n] = 0;
+      this.fastT[n] = t;
+      if (++this.fastSeen[n] < this.fastNeed) continue;
+      this.fastSeen[n] = 0; this.on[n] = 1; this.goneT[n] = 0;
+      this.lastOn[n] = t + 40; this.atkOn[n] = this.attackT; // המסלול הרגיל לא ידווח שוב על אותה הקשה
+      events.push({ type: 'on', midi: n, ghost: false, t0: this.attackT, fast: true });
+    }
+  };
+
   // x: N הדגימות האחרונות. t: זמן (אלפיות שנייה). expected: Set של תווים שהמשחק מצפה להם (או null).
   // newSamples: כמה דגימות חדשות נוספו מאז הקריאה הקודמת.
-  Detector.prototype.process = function (x, t, expected, newSamples) {
+  // fastOnly: מריץ רק את גלאי הנקישות והמסלול המהיר (לקריאות ביניים כל 5 אלפיות שנייה)
+  Detector.prototype.process = function (x, t, expected, newSamples, fastOnly) {
     const N = this.N, re = this.re, im = this.im, w = this.win, mag = this.mag, sm = this.sm, nf = this.nf, pre = this.pre;
     const maxBin = this.maxBin, binHz = this.binHz, events = [];
+    if (newSamples == null) newSamples = Math.round((this.lastA == null ? 10 : Math.max(2, Math.min(120, t - this.lastA))) * this.sr / 1000);
+    newSamples = Math.max(0, Math.min(N - 2, newSamples | 0)); this.lastA = t;
+    if (fastOnly) { this.attacks(x, t, newSamples); if (this.fastOn) this.fast(x, t, expected, events); return events; }
     const dt = this.lastT == null ? 20 : Math.max(2, Math.min(120, t - this.lastT)); this.lastT = t;
     const dec = Math.exp(-dt / ENV_TAU);
-    if (newSamples == null) newSamples = Math.round(dt * this.sr / 1000);
-    newSamples = Math.max(0, Math.min(N - 2, newSamples | 0));
 
     let s = 0; for (let i = N - 1024; i < N; i++) s += x[i] * x[i];
     this.level = Math.sqrt(s / 1024);
     this.attacks(x, t, newSamples);
+    if (this.fastOn) this.fast(x, t, expected, events);
 
     for (let i = 0; i < N; i++) { re[i] = x[i] * w[i]; im[i] = 0; }
-    this.fft();
+    this.fft(re, im);
     const sc = 4 / N, first = this.frames === 0, al = 1 - Math.exp(-dt / 43), up = Math.exp(dt * 0.00022);
     pre[0] = 0;
     for (let k = 0; k <= maxBin + 1; k++) {

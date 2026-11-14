@@ -41,7 +41,7 @@ const Input = (() => {
 
   // ---- מיקרופון ---- (הזיהוי עצמו ב-detector.js)
   let an = null, td = null, det = null, stream = null, srcNode = null, timer = 0, expected = null;
-  let lastCtx = 0, hopMs = 10, procAvg = 0;
+  let lastCtx = 0, slowEvery = 2, tickN = 0, procAvg = 0; // דופק כל 5 אלפיות שנייה; ניתוח מלא כל דופק שני
   const mic = { on: false, level: 0, peak: 0, notes: [], error: '', tune: 0 };
 
   async function startMic(testNode) {
@@ -51,7 +51,7 @@ const Input = (() => {
       if (testNode) srcNode = testNode;
       else {
         // בלי עיבודי "שיחת טלפון" (ביטול הד, הנמכת רעש, הגבר אוטומטי) — הם מעוותים צלילי פסנתר
-        stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
+        stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1, latency: { ideal: 0 } } });
         srcNode = ac.createMediaStreamSource(stream);
       }
     } catch (e) { mic.error = 'אין גישה למיקרופון'; return false; }
@@ -59,8 +59,8 @@ const Input = (() => {
     an = ac.createAnalyser(); an.fftSize = det.N; an.smoothingTimeConstant = 0;
     srcNode.connect(an);
     td = new Float32Array(det.N);
-    mic.on = true; mic.error = ''; lastCtx = ac.currentTime; procAvg = 0;
-    timer = setInterval(tick, hopMs);
+    mic.on = true; mic.error = ''; lastCtx = ac.currentTime; procAvg = 0; tickN = 0;
+    timer = setInterval(tick, 5);
     return true;
   }
   function stopMic() {
@@ -80,13 +80,16 @@ const Input = (() => {
     an.getFloatTimeDomainData(td);
     // המנוע עובד בשעון השמע (מדויק לדגימה); חותמות הזמן מומרות לשעון של המשחק
     const off = p0 - ct * 1000;
-    const evs = det.process(td, ct * 1000, expected, fresh);
-    mic.level = det.level; mic.notes = det.present; mic.tune = det.tune;
+    // בין ניתוח מלא לניתוח מלא רץ רק המסלול המהיר (נקישות + תווים צפויים) — כדי להגיב תוך אלפיות שנייה
+    const fastOnly = (tickN++ % slowEvery) !== 0;
+    const evs = det.process(td, ct * 1000, expected, fresh, fastOnly);
     if (det.peak > mic.peak) mic.peak = det.peak;
     for (const e of evs) emit(e.type, e.midi, 'mic', !!e.ghost, e.t0 != null ? e.t0 + off : undefined);
-    // מכשיר איטי: עוברים לניתוח כל 20 אלפיות שנייה במקום 10
+    if (fastOnly) return;
+    mic.level = det.level; mic.notes = det.present; mic.tune = det.tune;
+    // מכשיר איטי: ניתוח מלא כל 20 אלפיות שנייה במקום 10
     procAvg = procAvg * 0.95 + (performance.now() - p0) * 0.05;
-    if (hopMs === 10 && procAvg > 5) { hopMs = 20; clearInterval(timer); timer = setInterval(tick, hopMs); }
+    if (slowEvery === 2 && procAvg > 5) slowEvery = 4;
   }
   // המשחק מודיע לאילו תווים הוא מצפה עכשיו; הם מזוהים בסף רגיש יותר
   function setExpected(list) { expected = list && list.length ? new Set(list) : null; }
