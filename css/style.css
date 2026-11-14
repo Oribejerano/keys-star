@@ -136,3 +136,7 @@ input[type=range] { width: 100%; accent-color: var(--acc); height: 32px; }
 #hudLyric:empty { display: none; }
 #adVideo iframe { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 14px; display: block; margin-bottom: 10px; }
 .pill.warn { background: #7f1d1d; color: #fecaca; }
+
+#homeCal { background: linear-gradient(120deg, #0f766e, #2563eb); margin-bottom: 8px; }
+.set .btns { margin-top: 10px; }
+.set .btn { padding: 10px 14px; font-size: 15px; }

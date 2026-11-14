@@ -3,6 +3,7 @@
   const $ = id => document.getElementById(id);
   const D = Store.d;
   D.wishes = D.wishes || [];
+  let calMode = false;
   let curSong = null, arr = 'rh', tempo = 1, lastRun = null, smartTok = 0, catFilter = 'all', pendingAdd = null, recording = false, setRaf = 0;
   const allSongs = () => [...SONGS, ...D.mine];
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -52,6 +53,7 @@
     const day = Math.floor(Date.now() / 864e5), ds = SONGS[day % SONGS.length];
     const done = (D.prog[ds.id] || {}).play === 3;
     $('daily').innerHTML = `<button class="daily" data-song="${ds.id}"><div><b>${done ? '✅' : '🎯'} האתגר היומי: ${esc(ds.title)}</b><span>${done ? 'הושלם! כל הכבוד' : 'השיגי 3 כוכבים במצב נגינה'}</span></div><span class="go">▶</span></button>`;
+    if (!D.cal) $('daily').innerHTML = '<button class="daily" id="homeCal"><div><b>🎤 לפני שמתחילים: בדיקת האזנה</b><span>חצי דקה — בודקים שהאפליקציה שומעת את האורגנית</span></div><span class="go">▶</span></button>' + $('daily').innerHTML;
     $('catChips').innerHTML = [['all', 'הכול'], ...CATS].map(([id, n]) => `<button class="chip ${catFilter === id ? 'sel' : ''}" data-cat="${id}">${n}</button>`).join('');
     const have = new Set(D.mine.map(s => s.title));
     let html = '';
@@ -72,6 +74,7 @@
     $('songList').innerHTML = html;
   }
   $('scr-home').addEventListener('click', e => {
+    if (e.target.closest('#homeCal')) { startCal(); return; }
     const c = e.target.closest('[data-cat]'); if (c) { catFilter = c.dataset.cat; renderHome(); return; }
     const s = e.target.closest('[data-song]'); if (s) { openSong(s.dataset.song); return; }
     const w = e.target.closest('[data-want]'); if (w) { openAdd({ title: w.dataset.want, artist: w.dataset.artist, cat: w.dataset.wcat }); return; }
@@ -178,6 +181,8 @@
     $('gSrc').classList.toggle('warn', !Input.micOn && !Input.midi.ok);
     $('gPause').textContent = '⏸';
     ['gPause', 'gSlow', 'gFast', 'gTempo'].forEach(id => { $(id).style.display = mode === 'record' ? 'none' : ''; });
+    $('gSkip').style.display = mode === 'wait' ? '' : 'none';
+    Input.mic.peak = 0;
   }
   function launch(o) {
     go('game'); gameHud(o.mode);
@@ -212,7 +217,8 @@
     const launchKeep = o => { gameHud(o.mode); Game.start(curSong, Object.assign({ arr }, o)); $('gTempo').textContent = Math.round(Game.tempo * 100) + '%'; };
     next();
   }
-  $('gExit').onclick = () => { if (recording) return endRecord(); go(curSong ? 'song' : 'home'); };
+  $('gExit').onclick = () => { if (recording) return endRecord(); if (calMode) { calMode = false; return go('settings'); } go(curSong ? 'song' : 'home'); };
+  $('gSkip').onclick = () => Game.skip();
   $('gPause').onclick = () => { $('gPause').textContent = Game.pause() ? '▶' : '⏸'; };
   const nudge = d => { const v = Math.max(0.4, Math.min(1.3, Math.round((Game.tempo + d) * 100) / 100)); Game.setTempo(v); $('gTempo').textContent = Math.round(v * 100) + '%'; };
   $('gSlow').onclick = () => nudge(-0.1);
@@ -221,6 +227,9 @@
   // ---------- תוצאות ----------
   function showResult(s) {
     if (s.mode === 'listen') return openSong(curSong.id);
+    // כיוונון עצמי: אם ההקשות מגיעות באופן עקבי מוקדם/מאוחר, מתקנים בהדרגה את פיצוי ההשהיה
+    if (s.medOff != null && Input.micOn) { CFG.latency = Math.max(0, Math.min(300, Math.round(CFG.latency + 0.5 * s.medOff * 1000))); Store.save(); }
+    Input.syncTune();
     touchStreak();
     const key = s.mode === 'wait' ? 'wait' : 'play';
     const p = D.prog[curSong.id] = D.prog[curSong.id] || {};
@@ -263,8 +272,14 @@
       `<div class="set"><div class="r"><span>שמות התווים</span><select data-k="names"><option value="sol">דו רה מי</option><option value="letters">C D E</option></select></div></div>` +
       chk('mic', '🎤 האזנה לפסנתר במיקרופון', 'האפליקציה שומעת את הנגינה ובודקת אותה. שימי את המכשיר קרוב לרמקול של האורגנית.') +
       `<div class="set"><div id="micNote">—</div><div class="meter"><i id="micLvl"></i></div>
-        <div class="r"><span>פיצוי השהיה</span><input type="range" data-k="latency" min="0" max="300" step="10" value="${CFG.latency}"></div>
-        <small>בדיקה: נגני תו אחד — השם שלו אמור להופיע למעלה. דיבור ורעשי רקע לא אמורים להופיע.</small></div>` +
+        <small>נגני תו אחד — השם שלו אמור להופיע למעלה. דיבור ורעשי רקע לא אמורים להופיע.</small>
+        <div class="btns"><button class="btn" id="setCal">🎯 בדיקת האזנה (חצי דקה)</button></div>
+        <small id="calInfo">${D.cal ? `בדיקה אחרונה: זוהו ${D.cal.ok} מתוך ${D.cal.total} קלידים. ${esc(D.cal.note || '')}` : 'מומלץ לעשות פעם אחת: האפליקציה מבקשת 8 קלידים ובודקת שהיא שומעת כל אחד.'}</small></div>` +
+      `<div class="set"><div class="r"><span>פיצוי השהיה (מתכוונן לבד)</span><b>${CFG.latency} אלפיות שנייה</b></div>
+        <input type="range" data-k="latency" min="0" max="300" step="10" value="${CFG.latency}">
+        <div class="r"><span>כיוון הכלי שנלמד</span><b>${(CFG.tune || 0) > 0 ? '+' : ''}${Math.round(CFG.tune || 0)} סנט</b></div></div>` +
+      `<div class="set"><div class="r"><span>🎙️ הקלטת דוגמה לכיוונון</span><button class="btn ghost" id="setSample">הקלטה (30 שניות)</button></div>
+        <small id="sampleInfo">מקליט חצי דקה של נגינה לקובץ, כדי שאפשר יהיה לכוונן את ההאזנה בדיוק לאורגנית שלכם. נגני קלידים בודדים, כמה אקורדים, ודברו קצת ברקע.</small></div>` +
       `<div class="set"><div class="r"><span>🎹 חיבור MIDI</span><b>${Input.midi.ok ? esc(Input.midi.devices.join(', ')) : navigator.requestMIDIAccess ? 'לא מחובר' : 'לא נתמך בדפדפן הזה'}</b></div><small>חיבור האורגנית בכבל USB נותן את הזיהוי המדויק ביותר (נתמך בכרום במחשב ובאנדרואיד).</small></div>` +
       chk('backing', 'ליווי אוטומטי', 'האפליקציה מנגנת את היד שאת לא מנגנת. כבוי אוטומטית כשהמיקרופון פעיל.') +
       chk('metro', 'מטרונום') + chk('staff', 'הצגת חמשה עם תווים') +
@@ -272,6 +287,21 @@
       `<button class="link danger" id="setReset">איפוס כל ההתקדמות</button>`;
     $('setBody').querySelector('[data-k=names]').value = CFG.names;
     $('setReset').onclick = () => { if (confirm('לאפס כוכבים, ניקוד ורצף? (השירים שהוספת יישארו)')) { D.prog = {}; D.xp = 0; D.streak = { last: '', n: 0 }; D.chordBest = 0; Store.save(); toast('אופס'); } };
+    $('setCal').onclick = () => startCal();
+    $('setSample').onclick = async () => {
+      Snd.unlock(); await ensureMic();
+      if (!Input.micOn) return;
+      const info = $('sampleInfo'), btn = $('setSample'); btn.disabled = true;
+      try {
+        const blob = await Input.recordSample(30, f => { const el = $('sampleInfo'); if (el) el.textContent = `⏺ מקליטה… ${Math.round(f * 30)} / 30 שניות`; });
+        const file = new File([blob], 'piano-sample.wav', { type: 'audio/wav' });
+        let shared = false;
+        if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: 'דוגמת נגינה' }); shared = true; } catch (err) { /* בוטל — מורידים במקום */ } }
+        if (!shared) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'piano-sample.wav'; document.body.appendChild(a); a.click(); a.remove(); }
+        if ($('sampleInfo')) $('sampleInfo').textContent = 'ההקלטה נשמרה כקובץ piano-sample.wav. העבירו אותו למחשב, לתיקיית הפרויקט.';
+      } catch (err) { info.textContent = err.message || 'ההקלטה נכשלה'; }
+      if ($('setSample')) $('setSample').disabled = false;
+    };
     ensureMic();
     const st = CFG.names === 'letters' ? 'letters' : 'sol';
     const loop = () => {
@@ -290,6 +320,27 @@
     if (k === 'mic') { Snd.unlock(); if (CFG.mic) await ensureMic(); else Input.stopMic(); }
     if (k === 'names') renderSettings();
   });
+
+  // ---------- בדיקת האזנה ----------
+  // האפליקציה מבקשת 8 קלידים לאורך המקלדת, ובודקת שהמיקרופון שומע ומזהה כל אחד
+  const CAL_SONG = { id: '_cal', title: 'בדיקת האזנה', bpm: 60, rh: 'C3:2 G3:2 C4:2 E4:2 G4:2 C5:2 G5:2 C6:2' };
+  async function startCal() {
+    goFull(); Snd.unlock(); await ensureMic();
+    if (!Input.micOn) return;
+    calMode = true; go('game'); gameHud('wait');
+    Game.start(CAL_SONG, {
+      mode: 'wait', arr: 'rh', tempo: 1, banner: 'נגני את הקליד המסומן (⏭ לדילוג)',
+      onFinish: s => {
+        calMode = false;
+        const ok = s.perfect + s.ok + s.good, pk = Input.mic.peak;
+        const note = pk > 0.97 ? 'הצליל חזק מדי למיקרופון — כדאי להרחיק מעט את המכשיר או להנמיך.' : pk < 0.02 ? 'הצליל חלש — כדאי לקרב את המכשיר לרמקול או להגביר.' : '';
+        D.cal = { ok, total: s.total, note, date: Date.now() }; Store.save(); Input.syncTune();
+        Snd.chime(ok >= s.total - 1);
+        toast(ok >= s.total - 1 ? `🎤 ההאזנה עובדת מצוין (${ok}/${s.total})` : `זוהו ${ok} מתוך ${s.total} קלידים. ${note || 'נסי לקרב את המכשיר לרמקול.'}`, 4500);
+        go('settings');
+      },
+    });
+  }
 
   // ---------- מסך מלא ----------
   const fsEl = document.documentElement;

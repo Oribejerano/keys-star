@@ -58,7 +58,7 @@ const Game = (() => {
     endAt = range[0];
     for (const n of notes) endAt = Math.max(endAt, n.start + Math.min(n.dur, 2));
     endAt += 0.5;
-    st = { perfect: 0, good: 0, ok: 0, miss: 0, wrong: 0, maxCombo: 0, barErr: {} };
+    st = { perfect: 0, good: 0, ok: 0, miss: 0, wrong: 0, maxCombo: 0, barErr: {}, offs: [] };
     combo = 0; score = 0; p0 = 0; waiting = false; stepWrong = false; pops = []; flashes.clear(); lastHit.clear();
     for (const k in hudCache) delete hudCache[k];
     setHud('hudBanner', opts.banner || ''); setHud('hudMsg', ''); $('hudMsg').classList.remove('on');
@@ -66,6 +66,13 @@ const Game = (() => {
     raf = requestAnimationFrame(frame);
   }
   function stop() { running = false; cancelAnimationFrame(raf); Input.setExpected(null); }
+  // דילוג על התו/האקורד הנוכחי במצב לימוד (כדי לא להיתקע אם משהו לא מזוהה)
+  function skip() {
+    if (!running || mode !== 'wait') return;
+    const nx = nextMine(); if (!nx) return;
+    for (let i = p0; i < notes.length && notes[i].start <= nx.start + 0.06; i++) if (notes[i].mine && !notes[i].state) { notes[i].state = 2; st.miss++; barErr(notes[i].start); }
+    combo = 0; waiting = false; stepWrong = false; t = Math.max(t, nx.start);
+  }
   function pause(p) { paused = p === undefined ? !paused : p; return paused; }
   function setTempo(m) { opts.tempo = m; spb = 60 / (song.bpm * m); }
 
@@ -81,7 +88,8 @@ const Game = (() => {
   function barErr(beat) { const b = barOf(beat); st.barErr[b] = (st.barErr[b] || 0) + 1; }
   function flash(m, color, sec) { flashes.set(m, { color, until: performance.now() + sec * 1000 }); }
   function pop(text, m, color) { const r = kb.rect(m); pops.push({ text, x: r.x + r.w / 2, color, born: performance.now() }); if (pops.length > 12) pops.shift(); }
-  const lat = () => (Input.micOn ? CFG.latency / 1000 / spb : 0);
+  // במיקרופון: ההקשה מזוהה כ-0.1–0.2 שנייה אחרי שנוגנה, אז לא מכריזים על "פספוס" לפני שעבר הזמן הזה
+  const micWait = () => (Input.micOn ? (CFG.latency + 220) / 1000 / spb : 0);
 
   function step(dt) {
     let nt = t + dt / spb;
@@ -94,7 +102,7 @@ const Game = (() => {
       clickIdx = ci;
       if ((mode === 'play' && nt < range[0]) || (CFG.metro && mode !== 'wait')) Snd.click(((ci % B.beats) + B.beats) % B.beats === 0);
     }
-    const tj = nt - lat();
+    const tj = nt - micWait();
     for (let i = p0; i < notes.length; i++) {
       const n = notes[i];
       if (n.start > nt + 1e-6) break;
@@ -113,7 +121,7 @@ const Game = (() => {
     if (Input.micOn && mode !== 'listen') {
       const exp = [], nx = nextMine();
       if (nx) {
-        const lim = mode === 'wait' ? ((nx.start - t) * spb <= 0.6 ? nx.start + 0.06 : -1e9) : tj + 0.5 / spb;
+        const lim = mode === 'wait' ? ((nx.start - t) * spb <= 0.6 ? nx.start + 0.06 : -1e9) : nt + 0.4 / spb;
         for (let i = p0; i < notes.length && notes[i].start <= lim; i++) if (notes[i].mine && !notes[i].state) exp.push(notes[i].midi);
       }
       Input.setExpected(exp);
@@ -148,7 +156,11 @@ const Game = (() => {
       return;
     }
     if (t < range[0] - 0.6) return;
-    const tj = t - lat(); let best = null, bd = 1e9, near = null;
+    // זמן המשחק ברגע ההקשה האמיתי: המנוע מוסר חותמת זמן של הנקישה עצמה, לא של רגע הזיהוי
+    const nowP = performance.now();
+    let tj = t + Math.min(50, nowP - last) / 1000 / spb;
+    if (e.src === 'mic') tj -= (CFG.latency + (e.t0 != null ? Math.max(0, Math.min(400, nowP - e.t0)) : 90)) / 1000 / spb;
+    let best = null, bd = 1e9, near = null;
     for (let i = p0; i < notes.length; i++) {
       const n = notes[i];
       if (!n.mine || n.state) continue;
@@ -158,7 +170,8 @@ const Game = (() => {
       const d = Math.abs(n.start - tj); if (d < bd) { bd = d; best = n; }
     }
     if (best && bd * spb <= WIN) {
-      const ds = bd * spb, perf = Input.micOn ? 0.13 : 0.09;
+      const ds = bd * spb, perf = e.src === 'mic' ? 0.1 : 0.09;
+      if (e.src === 'mic') st.offs.push((tj - best.start) * spb);
       doHit(best, ds <= perf ? 'perfect' : ds <= GOOD ? 'good' : 'ok');
     } else wrongNote(e, near && (near.start - tj) * spb < 1.2 ? [near] : null);
   }
@@ -189,6 +202,9 @@ const Game = (() => {
     const w = st.perfect + st.good * 0.8 + st.ok * 0.5;
     const acc = mode === 'listen' ? 1 : Math.max(0, Math.min(1, (w - 0.25 * st.wrong) / total));
     const stars = mode === 'listen' ? 0 : acc >= 0.93 ? 3 : acc >= 0.8 ? 2 : acc >= 0.6 ? 1 : 0;
+    // הקדמה/איחור אופייני (חציון) של ההקשות — משמש לכיוונון עצמי של פיצוי ההשהיה
+    const so = st.offs.slice().sort((x, y) => x - y);
+    st.medOff = so.length >= 8 ? so[so.length >> 1] : null;
     if (opts.onFinish) opts.onFinish(Object.assign({}, st, { total, acc, stars, score: Math.round(score), mode, bars: B.bars, beats: B.beats, pickup: B.pickup }));
   }
 
@@ -333,5 +349,5 @@ const Game = (() => {
     ctx.restore(); ctx.textBaseline = 'alphabetic';
   }
 
-  return { init, start, stop, pause, setTempo, recorded, get time() { return t; }, get running() { return running; }, get tempo() { return opts.tempo; } };
+  return { init, start, stop, pause, skip, setTempo, recorded, get time() { return t; }, get running() { return running; }, get tempo() { return opts.tempo; } };
 })();
