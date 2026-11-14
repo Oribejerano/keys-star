@@ -87,6 +87,7 @@ const Chords = (() => {
     if (!silent) {
       if (g.score > Store.d.chordBest) { Store.d.chordBest = g.score; Store.save(); }
       if (onXP) onXP(g.score * 8, `כל הכבוד! ${g.score} אקורדים בדקה 🎉`);
+      window.dispatchEvent(new CustomEvent('keys:chords', { detail: g.score }));
     }
     ui();
   }

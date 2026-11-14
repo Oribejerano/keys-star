@@ -12,7 +12,7 @@
 <link rel="icon" href="icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20261114c">
+<link rel="stylesheet" href="css/style.css?v=20261114h">
 </head>
 <body>
 <div id="app">
@@ -52,6 +52,7 @@
       <div class="modes">
         <button class="mode" data-mode="listen"><i>👂</i><b>להקשיב</b><span>שומעים ורואים את השיר</span></button>
         <button class="mode" data-mode="wait"><i>🐢</i><b>ללמוד</b><span>השיר מחכה לך בכל תו</span></button>
+        <button class="mode" data-mode="echo"><i>🦜</i><b>תופסת מנגינה</b><span>שומעים קטע — ומנגנים אותו בחזרה מהזיכרון</span></button>
         <button class="mode hot" data-mode="smart"><i>🎯</i><b>אימון חכם</b><span>חלק אחרי חלק, מלאט למהיר</span></button>
         <button class="mode" data-mode="play"><i>🎮</i><b>משחק</b><span>בקצב, עם ניקוד וכוכבים</span></button>
       </div>
@@ -150,21 +151,23 @@
     <button data-go="settings"><i>⚙️</i><span>הגדרות</span></button>
   </nav>
   <div id="toast"></div>
+  <input type="file" id="packFile" hidden>
   <input type="file" id="midiFile" accept=".mid,.midi,.kar,audio/midi" multiple hidden>
 </div>
 
-<script src="js/store.js?v=20261114c"></script>
-<script src="js/music.js?v=20261114c"></script>
-<script src="js/songs.js?v=20261114c"></script>
-<script src="js/audio.js?v=20261114c"></script>
-<script src="js/detector.js?v=20261114c"></script>
-<script src="js/input.js?v=20261114c"></script>
-<script src="js/keyboard.js?v=20261114c"></script>
-<script src="js/game.js?v=20261114c"></script>
-<script src="js/chords.js?v=20261114c"></script>
-<script src="js/samples.js?v=20261114c"></script>
-<script src="js/midifile.js?v=20261114c"></script>
-<script src="js/websongs.js?v=20261114c"></script>
-<script src="js/app.js?v=20261114c"></script>
+<script src="js/store.js?v=20261114h"></script>
+<script src="js/music.js?v=20261114h"></script>
+<script src="js/songs.js?v=20261114h"></script>
+<script src="js/audio.js?v=20261114h"></script>
+<script src="js/detector.js?v=20261114h"></script>
+<script src="js/input.js?v=20261114h"></script>
+<script src="js/keyboard.js?v=20261114h"></script>
+<script src="js/game.js?v=20261114h"></script>
+<script src="js/chords.js?v=20261114h"></script>
+<script src="js/samples.js?v=20261114h"></script>
+<script src="js/midifile.js?v=20261114h"></script>
+<script src="js/websongs.js?v=20261114h"></script>
+<script src="js/library.js?v=20261114h"></script>
+<script src="js/app.js?v=20261114h"></script>
 </body>
 </html>

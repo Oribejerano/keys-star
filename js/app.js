@@ -2,11 +2,10 @@
 (() => {
   const $ = id => document.getElementById(id);
   const D = Store.d;
-  let calMode = false;
   let curSong = null, arr = 'rh', tempo = 1, lastRun = null, smartTok = 0, catFilter = 'all', query = '', recording = false, setRaf = 0;
-  const allSongs = () => [...SONGS, ...D.mine];
+  const allSongs = () => [...SONGS, ...D.mine, ...Library.list];
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const starsOf = id => { const p = D.prog[id]; return p ? Math.max(p.wait || 0, p.play || 0) : 0; };
+  const starsOf = id => { const p = D.prog[id]; return p ? Math.max(p.wait || 0, p.play || 0, p.echo || 0) : 0; };
   const starHtml = n => `<span class="st">${[1, 2, 3].map(i => `<span class="${i <= n ? '' : 'off'}">★</span>`).join('')}</span>`;
 
   let toastT = 0;
@@ -51,8 +50,8 @@
   // ---------- בית ----------
   // כל קטגוריה מקבלת צבע וסמל משלה — כך קל לזהות שירים במבט
   const LOOK = { known: ['#fbbf24', '#fb7185', '🎈'], israeli: ['#38bdf8', '#34d399', '🌟'], classic: ['#a78bfa', '#6366f1', '🎻'], disney: ['#60a5fa', '#c084fc', '🏰'],
-    ilnew: ['#f472b6', '#a78bfa', '🎤'], rock: ['#fb923c', '#ef4444', '🎸'], web: ['#38bdf8', '#818cf8', '🌐'], mine: ['#f472b6', '#fb923c', '💖'] };
-  const ORDER = ['known', 'israeli', 'disney', 'ilnew', 'classic', 'rock', 'web', 'mine'];
+    ilnew: ['#f472b6', '#a78bfa', '🎤'], pop: ['#f472b6', '#38bdf8', '🎧'], rock: ['#fb923c', '#ef4444', '🎸'], web: ['#38bdf8', '#818cf8', '🌐'], mine: ['#f472b6', '#fb923c', '💖'] };
+  const ORDER = ['known', 'israeli', 'disney', 'ilnew', 'pop', 'rock', 'classic', 'web', 'mine'];
   const catName = id => ((CATS.find(c => c[0] === id) || [])[1] || '').replace(/^\S+\s/, '');
   // לכל שיר תמונה וצבעים משלו (לשירים המובנים — תמונה שמתאימה לשיר; לשירים שנוספו — לפי השם)
   const PIC = { twinkle: '⭐', jacob: '😴', yonatan: '🌳', birthday: '🎂', jingle: '🔔', hatikvah: '🇮🇱', london: '🌉', yankee: '🎩', saints: '🎺', susanna: '🪕',
@@ -68,33 +67,67 @@
     const [k, t] = diff(s.level || 3);
     return `<button class="card" data-song="${s.id}">${coverHtml(s)}<b dir="auto">${esc(s.title)}</b><small dir="auto">${esc(s.composer || '')}</small><div class="row"><span class="diff ${k}">${t}</span>${starHtml(starsOf(s.id))}</div></button>`;
   }
+  // ---------- אתגר יומי: כל פעם אתגר אחר (סוג ושיר משתנים), ואחרי שמסיימים — מיד אתגר חדש ----------
+  const CH_TYPES = ['stars', 'echo', 'learn', 'chords'];
+  const lvCap = () => Math.min(5, 2 + Math.floor(level() / 2));
+  const mix = x => { x ^= x >>> 16; x = Math.imul(x, 0x45d9f3b); x ^= x >>> 16; x = Math.imul(x, 0x45d9f3b); x ^= x >>> 16; return x >>> 0; };
+  // מאגר לאתגרים ולהפתעות: בעיקר שירי ילדים, דיסני וסרטים, ישראלי וקלאסי; לפעמים גם פופ ורוק
+  const KID = new Set(['known', 'israeli', 'disney', 'classic']);
+  function pickPool(r, maxLv) {
+    const all = allSongs().filter(s => (s.level || 3) <= maxLv && s.cat !== 'mine'), kid = all.filter(s => KID.has(s.cat));
+    return kid.length >= 10 && r % 3 !== 0 ? kid : all;
+  }
+  function challenge() {
+    const day = Math.floor(Date.now() / 864e5);
+    if (!D.daily || D.daily.day !== day) { D.daily = { day, n: 0 }; Store.save(); }
+    // סוגי האתגרים מתחלפים בסבב (כל יום הסבב מתחיל ממקום אחר), והשיר נבחר באקראי
+    const seed = mix(hash('ch' + day) ^ mix(D.daily.n + 1)), type = CH_TYPES[(day + D.daily.n) % CH_TYPES.length];
+    if (type === 'chords') return { type, need: Math.max(6, Math.min(25, (D.chordBest || 0) + 1)) };
+    const pool = pickPool(mix(seed ^ 0x51), lvCap());
+    const fresh = pool.filter(s => starsOf(s.id) < 3), P = fresh.length ? fresh : pool;
+    return { type, song: P[mix(seed ^ 0x9e3779b9) % P.length] };
+  }
+  function challengeDone() { D.daily.n++; Store.save(); addXP(60, '🏆 האתגר הושלם! +60 נקודות · מחכה לך אתגר חדש'); }
+  function challengeHtml() {
+    const c = challenge(); if (!c.song && c.type !== 'chords') return '';
+    const t = c.song ? esc(c.song.title) : '';
+    const [ic, b, sub] = c.type === 'stars' ? ['🎮', `3 כוכבים במשחק: ${t}`, 'מנגנים בקצב, בלי לפספס'] : c.type === 'learn' ? ['🐢', `ללמוד שיר: ${t}`, '2 כוכבים במצב לימוד']
+      : c.type === 'echo' ? ['🦜', `לתפוס את המנגינה: ${t}`, '2 כוכבים בתופסת מנגינה'] : ['🎼', `${c.need} אקורדים בדקה אחת`, 'באתגר האקורדים'];
+    return `<button class="daily" ${c.song ? `data-song="${c.song.id}"` : 'data-go="chords"'}><i>${ic}</i><div><b dir="auto">האתגר: ${b}</b><span>${sub} · <u data-skip="1">🔀 אתגר אחר</u></span></div><span class="go">▶</span></button>`;
+  }
+  // לכל קטגוריה גדולה מציגים מבחר משתנה מדי יום (כדי לגלות שירים חדשים), ואפשר לפתוח את כולם
+  const dayMix = list => { const d = Math.floor(Date.now() / 864e5); return list.slice().sort((x, y) => hash(x.id + d) - hash(y.id + d)); };
+  let catShow = 60;
   function renderHome() {
     renderStats();
     const h = new Date().getHours();
     $('hiTitle').textContent = h < 5 ? 'לילה טוב! 🌙' : h < 12 ? 'בוקר טוב! ☀️' : h < 17 ? 'צהריים טובים! 🌼' : h < 21 ? 'ערב טוב! 🌆' : 'לילה טוב! 🌙';
-    // כרטיסים בראש: בדיקת האזנה (פעם אחת), המשך מאיפה שהפסקת, האתגר היומי
+    const songsAll = allSongs();
+    // כרטיסים בראש: להמשיך מאיפה שהפסקת, האתגר, והפתעה
     let top = '';
-    if (!D.cal) top += '<button class="daily cal" id="homeCal"><i>🎤</i><div><b>לפני שמתחילים: בדיקת האזנה</b><span>חצי דקה — בודקים שהאפליקציה שומעת את האורגנית</span></div><span class="go">▶</span></button>';
-    const last = D.last && allSongs().find(s => s.id === D.last);
-    if (last) top += `<button class="daily cont" data-song="${last.id}"><i>▶️</i><div><b>להמשיך: ${esc(last.title)}</b><span>${starsOf(last.id) ? 'יש לך כבר ' + starsOf(last.id) + ' ⭐ — אפשר להשיג עוד!' : 'בואי נמשיך לתרגל'}</span></div><span class="go">▶</span></button>`;
-    const day = Math.floor(Date.now() / 864e5), ds = SONGS[day % SONGS.length], done = (D.prog[ds.id] || {}).play === 3;
-    top += `<button class="daily" data-song="${ds.id}"><i>${done ? '🏆' : '🎯'}</i><div><b>האתגר היומי: ${esc(ds.title)}</b><span>${done ? 'הושלם! כל הכבוד' : 'השיגי 3 כוכבים במצב משחק'}</span></div><span class="go">▶</span></button>`;
+    const last = D.last && songsAll.find(s => s.id === D.last);
+    if (last) top += `<button class="daily cont" data-song="${last.id}"><i>▶️</i><div><b dir="auto">להמשיך: ${esc(last.title)}</b><span>${starsOf(last.id) ? 'יש לך כבר ' + starsOf(last.id) + ' ⭐ — אפשר להשיג עוד!' : 'בואי נמשיך לתרגל'}</span></div><span class="go">▶</span></button>`;
+    top += challengeHtml();
+    top += `<button class="daily surprise" id="surprise"><i>🎲</i><div><b>הפתיעי אותי!</b><span>שיר אקראי מתוך ${songsAll.length.toLocaleString('he-IL')} שירים</span></div><span class="go">▶</span></button>`;
     $('daily').innerHTML = top;
     $('daily').hidden = !!query;
-    // רק קטגוריות שיש בהן שירים
-    const cats = ORDER.filter(id => id === 'mine' || allSongs().some(s => s.cat === id));
+    const cats = ORDER.filter(id => id === 'mine' || songsAll.some(s => s.cat === id));
     if (!cats.includes(catFilter) && catFilter !== 'all') catFilter = 'all';
     $('catChips').innerHTML = [['all', '✨ הכול'], ...cats.map(id => [id, (LOOK[id] || LOOK.mine)[2] + ' ' + catName(id)])].map(([id, n]) => `<button class="chip ${catFilter === id ? 'sel' : ''}" data-cat="${id}">${n}</button>`).join('');
     $('catChips').hidden = !!query;
     let html = '';
     if (query) {
-      const q = query.toLowerCase(), found = allSongs().filter(s => (s.title + ' ' + (s.composer || '')).toLowerCase().includes(q));
-      html = found.length ? `<div class="cat">🎵 באפליקציה (${found.length})</div><div class="grid">${found.map(cardHtml).join('')}</div>` : '';
+      const q = query.toLowerCase(), found = songsAll.filter(s => (s.title + ' ' + (s.composer || '')).toLowerCase().includes(q));
+      html = found.length ? `<div class="cat">🎵 באפליקציה (${found.length})</div><div class="grid">${found.slice(0, 60).map(cardHtml).join('')}</div>` + (found.length > 60 ? '<div class="sub">מוצגים 60 הראשונים — אפשר לדייק את החיפוש</div>' : '') : '';
       html += '<div class="cat">🌐 מהאינטרנט</div><div id="webRes" class="weblist"></div>';
     } else for (const cid of cats) {
       if (catFilter !== 'all' && catFilter !== cid) continue;
-      const songs = allSongs().filter(s => s.cat === cid);
-      html += `<div class="cat">${(LOOK[cid] || LOOK.mine)[2]} ${catName(cid)}</div><div class="grid">${songs.map(cardHtml).join('')}`;
+      let songs = songsAll.filter(s => s.cat === cid);
+      const big = songs.length > 12, total = songs.length;
+      if (big) songs = dayMix(songs);
+      const lim = catFilter === 'all' ? 10 : catShow;
+      html += `<div class="cat">${(LOOK[cid] || LOOK.mine)[2]} ${catName(cid)}${total > 12 ? ` <small class="cnt">${total.toLocaleString('he-IL')} שירים</small>` : ''}</div><div class="grid">${songs.slice(0, lim).map(cardHtml).join('')}`;
+      if (total > lim) html += catFilter === 'all' ? `<button class="card add more" data-cat="${cid}"><i>➕</i><b>לכל ${total.toLocaleString('he-IL')} השירים</b></button>` : '<button class="card add more" id="catMore"><i>⬇️</i><b>עוד שירים</b></button>';
       if (cid === 'mine') html += '<button class="card add" data-rec="1"><i>⏺</i><b>להקליט שיר</b><small>מנגנים, והאפליקציה זוכרת</small></button><button class="card add" data-midi="1"><i>📂</i><b>קובץ MIDI</b><small>להורים: הוספת שיר מקובץ</small></button>';
       html += '</div>';
     }
@@ -102,12 +135,20 @@
     if (query) webSearch(query);
   }
   $('scr-home').addEventListener('click', e => {
-    if (e.target.closest('#homeCal')) { startCal(); return; }
-    const c = e.target.closest('[data-cat]'); if (c) { catFilter = c.dataset.cat; renderHome(); return; }
+    if (e.target.closest('[data-skip]')) { D.daily.n++; Store.save(); renderHome(); return; }
+    if (e.target.closest('#surprise')) {
+      const pool = pickPool(Math.floor(Math.random() * 999), lvCap() + 1).filter(s => s.id !== D.last);
+      if (pool.length) { Snd.unlock(); Snd.chime(true); openSong(pool[Math.floor(Math.random() * pool.length)].id); }
+      return;
+    }
+    if (e.target.closest('#catMore')) { catShow += 60; renderHome(); return; }
+    const c = e.target.closest('[data-cat]'); if (c) { catFilter = c.dataset.cat; catShow = 60; renderHome(); $('scr-home').querySelector('.main').scrollTop = 0; return; }
     const s = e.target.closest('[data-song]'); if (s) { openSong(s.dataset.song); return; }
     if (e.target.closest('[data-rec]')) { startRecord(); return; }
     if (e.target.closest('[data-midi]')) $('midiFile').click();
   });
+  window.addEventListener('keys:chords', e => { const c = challenge(); if (c.type === 'chords' && e.detail >= c.need) challengeDone(); });
+  Library.ready.then(() => { if ($('scr-home').classList.contains('on')) renderHome(); });
   $('askInput').addEventListener('input', e => { query = e.target.value.trim(); renderHome(); });
   $('askInput').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
 
@@ -193,15 +234,17 @@
   }
 
   // ---------- מסך שיר ----------
-  function openSong(id) {
-    curSong = allSongs().find(s => s.id === id); if (!curSong) return;
+  async function openSong(id) {
+    const found = allSongs().find(s => s.id === id); if (!found) return;
+    if (found.lib && !found.raw) { try { await Library.load(found); } catch (e) { toast(e.message || 'לא הצלחתי לפתוח את השיר', 2500); return; } }
+    curSong = found;
     D.last = id; Store.save();
     const arrs = Music.arrangements(curSong);
     if (!arrs.some(a => a[0] === arr)) arr = arrs[0][0];
     $('sgTitle').textContent = curSong.title; $('sgComposer').textContent = curSong.composer || '';
     $('sgCover').outerHTML = coverHtml(curSong, true).replace('<div class="cover big"', '<div id="sgCover" class="cover big"');
     const p = D.prog[id] || {};
-    $('sgStars').innerHTML = `<span title="לימוד">🐢 ${starHtml(p.wait || 0)}</span><span title="משחק">🎮 ${starHtml(p.play || 0)}</span>`;
+    $('sgStars').innerHTML = `<span title="לימוד">🐢 ${starHtml(p.wait || 0)}</span><span title="תופסת">🦜 ${starHtml(p.echo || 0)}</span><span title="משחק">🎮 ${starHtml(p.play || 0)}</span>`;
     $('sgArr').innerHTML = arrs.map(([k, n]) => `<button class="chip ${k === arr ? 'sel' : ''}" data-arr="${k}">${n}</button>`).join('');
     document.querySelectorAll('#sgSpeed [data-tempo]').forEach(b => b.classList.toggle('sel', Math.abs(b.dataset.tempo - tempo) < 0.01));
     $('sgDelete').hidden = !D.mine.includes(curSong);
@@ -218,7 +261,8 @@
       const B = Music.build(curSong, arr), secs = [];
       for (let k = 0; k < B.bars; k += 4) secs.push([k === 0 ? 0 : B.pickup + k * B.beats, Math.min(B.total, B.pickup + (k + 4) * B.beats)]);
       runSmart(secs, [0.7, 0.9], true);
-    } else runSingle(m);
+    } else if (m === 'echo') runEcho();
+    else runSingle(m);
   });
 
   // ---------- הרצת משחק ----------
@@ -263,7 +307,46 @@
     const launchKeep = o => { gameHud(o.mode); Game.start(curSong, Object.assign({ arr }, o)); $('gTempo').textContent = Math.round(Game.tempo * 100) + '%'; };
     next();
   }
-  $('gExit').onclick = () => { if (recording) return endRecord(); if (calMode) { calMode = false; return go('settings'); } go(curSong ? 'song' : 'home'); };
+  // ---------- תופסת מנגינה: שומעים קטע קצר, ומנגנים אותו בחזרה מהזיכרון ----------
+  function runEcho() {
+    lastRun = () => runEcho();
+    go('game'); const tok = smartTok;
+    const B = Music.build(curSong, arr), per = B.beats * 2, secs = [];
+    for (let k = 0; k < B.bars; k += 2) {
+      const sec = [k === 0 ? 0 : B.pickup + k * B.beats, Math.min(B.total, B.pickup + k * B.beats + per)];
+      if (B.notes.some(n => n.mine && n.start >= sec[0] - 1e-6 && n.start < sec[1] - 1e-6)) secs.push(sec);
+    }
+    if (!secs.length) return openSong(curSong.id);
+    const agg = { perfect: 0, ok: 0, miss: 0, wrong: 0, total: 0 };
+    let i = 0, tries = 0;
+    const start = (o) => { gameHud('wait'); Game.start(curSong, Object.assign({ arr, tempo }, o)); $('gTempo').textContent = Math.round(Game.tempo * 100) + '%'; };
+    const listen = () => {
+      if (tok !== smartTok) return;
+      start({ mode: 'listen', onlyMine: true, range: secs[i], banner: `👂 הקשיבי · קטע ${i + 1}/${secs.length}`, onFinish: () => setTimeout(turn, 400) });
+    };
+    const turn = () => {
+      if (tok !== smartTok) return;
+      start({
+        mode: 'wait', hide: true, range: secs[i], banner: `🦜 עכשיו את! · קטע ${i + 1}/${secs.length}`,
+        onFinish: s => {
+          if (tok !== smartTok) return;
+          const acc = s.total ? (s.perfect + 0.5 * s.ok) / s.total : 1;
+          if (acc < 0.75 && tries < 1) { tries++; toast('כמעט! הקשיבי שוב 👂', 1400); return setTimeout(listen, 1200); }
+          agg.perfect += s.perfect; agg.ok += s.ok + s.good; agg.miss += s.miss; agg.wrong += s.wrong; agg.total += s.total;
+          tries = 0; i++;
+          if (acc >= 0.95) { Snd.chime(true); toast(['מושלם! 🎉', 'וואו! 🌟', 'בדיוק ככה! 💜'][i % 3], 1100); }
+          if (i >= secs.length) {
+            const a = agg.total ? (agg.perfect + 0.5 * agg.ok) / agg.total : 1;
+            return showResult({ mode: 'echo', perfect: agg.perfect, good: 0, ok: agg.ok, miss: agg.miss, wrong: agg.wrong, total: agg.total, acc: a,
+              stars: a >= 0.9 ? 3 : a >= 0.75 ? 2 : a >= 0.5 ? 1 : 0, score: Math.round(a * 1000), barErr: {}, bars: 0, beats: B.beats, pickup: B.pickup, medOff: null });
+          }
+          setTimeout(listen, 1300);
+        },
+      });
+    };
+    listen();
+  }
+  $('gExit').onclick = () => { if (recording) return endRecord(); go(curSong ? 'song' : 'home'); };
   $('gSkip').onclick = () => Game.skip();
   $('gPause').onclick = () => { $('gPause').textContent = Game.pause() ? '▶' : '⏸'; };
   const nudge = d => { const v = Math.max(0.4, Math.min(1.3, Math.round((Game.tempo + d) * 100) / 100)); Game.setTempo(v); $('gTempo').textContent = Math.round(v * 100) + '%'; };
@@ -277,11 +360,13 @@
     if (s.medOff != null && Input.micOn) { CFG.latency = Math.max(0, Math.min(300, Math.round(CFG.latency + 0.5 * s.medOff * 1000))); Store.save(); }
     Input.syncTune();
     touchStreak();
-    const key = s.mode === 'wait' ? 'wait' : 'play';
+    const key = s.mode === 'wait' ? 'wait' : s.mode === 'echo' ? 'echo' : 'play';
     const p = D.prog[curSong.id] = D.prog[curSong.id] || {};
     const newBest = s.stars > (p[key] || 0);
     p[key] = Math.max(p[key] || 0, s.stars); p.best = Math.max(p.best || 0, s.score);
     addXP(s.score / 40 + s.stars * 15);
+    const ch = challenge();
+    if (ch.song && ch.song.id === curSong.id && ((ch.type === 'stars' && key === 'play' && s.stars >= 3) || (ch.type === 'learn' && key === 'wait' && s.stars >= 2) || (ch.type === 'echo' && key === 'echo' && s.stars >= 2))) setTimeout(challengeDone, 1600);
     $('rsStars').innerHTML = [1, 2, 3].map(i => `<span class="${i <= s.stars ? '' : 'off'}">★</span>`).join('');
     $('rsTitle').textContent = s.stars === 3 ? 'מושלם! 🎉' : s.stars === 2 ? 'יפה מאוד!' : s.stars === 1 ? 'התחלה טובה!' : 'ממשיכים לתרגל 💪';
     $('rsAcc').textContent = Math.round(s.acc * 100) + '%';
@@ -319,8 +404,7 @@
       chk('mic', 'האזנה במיקרופון', 'האפליקציה שומעת את הנגינה ובודקת אותה. כדאי לשים את המכשיר קרוב לרמקול של האורגנית.') +
       `<div class="set"><div id="micNote">—</div><div class="meter"><i id="micLvl"></i></div>
         <small>נגני תו אחד — השם שלו יופיע כאן. דיבור ורעשי רקע לא אמורים להופיע.</small>
-        <div class="btns"><button class="btn" id="setCal">🎯 בדיקת האזנה (חצי דקה)</button></div>
-        <small id="calInfo">${D.cal ? `בדיקה אחרונה: זוהו ${D.cal.ok} מתוך ${D.cal.total} קלידים. ${esc(D.cal.note || '')}` : 'מומלץ לעשות פעם אחת: האפליקציה מבקשת 8 קלידים ובודקת שהיא שומעת כל אחד.'}</small></div>` +
+        </div>` +
       `<h3 class="sec">🎨 תצוגה וצלילים</h3>` +
       `<div class="set"><div class="r"><span>שמות התווים</span><select data-k="names"><option value="sol">דו רה מי</option><option value="letters">C D E</option></select></div></div>` +
       chk('staff', 'חמשה עם תווים מעל השיר') + chk('metro', 'מטרונום (תקתוק קצב)') +
@@ -328,6 +412,9 @@
       `<h3 class="sec">👨‍👩‍👧 להורים</h3>` +
       `<div class="set"><div class="r"><span>🎙️ הקלטות לכיוונון</span><button class="btn ghost" data-go="samples">פתיחה</button></div>
         <small id="sampleInfo">מקליטים את האורגנית האמיתית (קלידים, אקורדים, רעשי רקע), שומרים ושולחים — כדי לכוונן את ההאזנה בדיוק אליה.</small></div>` +
+      `<div class="set"><div class="r"><span>📦 חבילת שירים</span><button class="btn ghost" id="setPack">טעינת חבילה</button></div>
+        <small id="packInfo">${Library.list.length ? `במכשיר יש ${Library.list.length.toLocaleString('he-IL')} שירים מהחבילה.` : 'את הקובץ keys-star-songs.ksp מעבירים למכשיר (במייל, בדרייב או בוואטסאפ לעצמך), שומרים ב"קבצים", ולוחצים כאן "טעינת חבילה".'}</small>
+        ${Library.list.length ? '<button class="link danger" id="setPackDel">מחיקת החבילה מהמכשיר</button>' : ''}</div>` +
       `<div class="set"><div class="r"><span>📂 הוספת שירים מקובצי MIDI</span><button class="btn ghost" id="setMidi">בחירת קבצים</button></div><small>אפשר לבחור הרבה קבצים בבת אחת. הם נשמרים רק במכשיר הזה, בקטגוריה "השירים שלי".</small></div>` +
       `<div class="set"><div class="r"><span>פיצוי השהיה (מתכוונן לבד)</span><b>${CFG.latency} אלפיות שנייה</b></div>
         <input type="range" data-k="latency" min="0" max="300" step="10" value="${CFG.latency}">
@@ -337,7 +424,8 @@
       `<button class="link danger" id="setReset">איפוס כל ההתקדמות</button>`;
     $('setBody').querySelector('[data-k=names]').value = CFG.names;
     $('setReset').onclick = () => { if (confirm('לאפס כוכבים, ניקוד ורצף? (השירים שהוספת יישארו)')) { D.prog = {}; D.xp = 0; D.streak = { last: '', n: 0 }; D.chordBest = 0; Store.save(); toast('אופס'); } };
-    $('setCal').onclick = () => startCal();
+    $('setPack').onclick = () => $('packFile').click();
+    if ($('setPackDel')) $('setPackDel').onclick = async () => { if (!confirm('למחוק את כל שירי החבילה מהמכשיר? (הכוכבים נשמרים)')) return; await Library.clear(); toast('החבילה נמחקה', 1500); renderSettings(); };
     $('setMidi').onclick = () => $('midiFile').click();
     Samples.count().then(n => { const el = $('sampleInfo'); if (el && n) el.textContent = n === 1 ? 'הקלטה אחת שמורה במכשיר.' : `${n} הקלטות שמורות במכשיר.`; }).catch(() => {});
     ensureMic();
@@ -359,27 +447,16 @@
     if (k === 'names') renderSettings();
   });
 
-  // ---------- בדיקת האזנה ----------
-  // האפליקציה מבקשת 8 קלידים לאורך המקלדת, ובודקת שהמיקרופון שומע ומזהה כל אחד
-  const CAL_SONG = { id: '_cal', title: 'בדיקת האזנה', bpm: 60, rh: 'C3:2 G3:2 C4:2 E4:2 G4:2 C5:2 G5:2 C6:2' };
-  async function startCal() {
-    goFull(); Snd.unlock(); await ensureMic();
-    if (!Input.micOn) return;
-    Input.resetRef();
-    calMode = true; go('game'); gameHud('wait');
-    Game.start(CAL_SONG, {
-      mode: 'wait', arr: 'rh', tempo: 1, banner: 'נגני את הקליד המסומן (⏭ לדילוג)',
-      onFinish: s => {
-        calMode = false;
-        const ok = s.perfect + s.ok + s.good, pk = Input.mic.peak;
-        const note = pk > 0.93 ? 'הצליל חזק מדי למיקרופון — כדאי להרחיק מעט את המכשיר או להנמיך.' : pk < 0.02 ? 'הצליל חלש — כדאי לקרב את המכשיר לרמקול או להגביר.' : '';
-        D.cal = { ok, total: s.total, note, date: Date.now() }; Store.save(); Input.syncTune();
-        Snd.chime(ok >= s.total - 1);
-        toast(ok >= s.total - 1 ? `🎤 ההאזנה עובדת מצוין (${ok}/${s.total})` : `זוהו ${ok} מתוך ${s.total} קלידים. ${note || 'נסי לקרב את המכשיר לרמקול.'}`, 4500);
-        go('settings');
-      },
-    });
-  }
+  // ---------- חבילת שירים ----------
+  $('packFile').addEventListener('change', async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    const info = () => $('packInfo');
+    try {
+      const n = await Library.importPack(f, (msg) => { if (info()) info().textContent = '⏳ ' + msg; });
+      Snd.chime(true); toast(`נוספו ${n.toLocaleString('he-IL')} שירים! 🎉`, 2600);
+      renderSettings();
+    } catch (err) { toast(err.message || 'הטעינה נכשלה', 3500); renderSettings(); }
+  });
 
   // ---------- מסך מלא ----------
   const fsEl = document.documentElement;

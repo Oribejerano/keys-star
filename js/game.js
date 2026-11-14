@@ -6,7 +6,7 @@ const Game = (() => {
   let cv, ctx, W = 0, H = 0, dpr = 1, kb = null, song, B, opts = {}, notes = [];
   let t = 0, spb = 0.5, last = 0, raf = 0, running = false, paused = false, endAt = 0;
   let range = [0, 0], mode = 'play', st, combo = 0, score = 0, p0 = 0, clickIdx = 0;
-  let waiting = false, stepWrong = false, msgUntil = 0;
+  let waiting = false, stepWrong = false, msgUntil = 0, waitT0 = 0;
   const flashes = new Map(), lastHit = new Map(); let pops = [];
   const hudCache = {};
   let stepAt = -1, stepSize = 0, loM = 0, hiM = 127;
@@ -42,7 +42,7 @@ const Game = (() => {
     B = Music.build(song, opts.arr);
     range = opts.range || [0, B.total];
     notes = B.notes
-      .filter(n => n.start >= range[0] - 1e-6 && n.start < range[1] - 1e-6 && (n.mine || mode === 'listen' || backing))
+      .filter(n => n.start >= range[0] - 1e-6 && n.start < range[1] - 1e-6 && (n.mine || (mode === 'listen' && !opts.onlyMine) || backing))
       .map(n => Object.assign({}, n, { state: 0, mine: mode === 'listen' ? false : n.mine }));
     let lo = 127, hi = 0;
     for (const n of notes) { lo = Math.min(lo, n.midi); hi = Math.max(hi, n.midi); }
@@ -95,7 +95,7 @@ const Game = (() => {
     let nt = t + dt / spb;
     if (mode === 'wait') {
       const nx = nextMine();
-      if (nx && nt >= nx.start) { nt = nx.start; waiting = true; }
+      if (nx && nt >= nx.start) { if (!waiting) waitT0 = performance.now(); nt = nx.start; waiting = true; }
     }
     const ci = Math.floor(nt - B.pickup + 1e-6);
     if (ci > clickIdx) {
@@ -213,7 +213,9 @@ const Game = (() => {
     const now = performance.now();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const kbH = Math.max(84, Math.min(H * 0.25, 190));
-    const staffH = CFG.staff && H > 430 ? Math.min(150, H * 0.24) : 0;
+    // תופסת מנגינה: התווים מוסתרים — מנגנים מהזיכרון; רמז רק אחרי טעות או המתנה ארוכה
+    const hidden = opts.hide && mode === 'wait';
+    const staffH = CFG.staff && H > 430 && !hidden ? Math.min(150, H * 0.24) : 0;
     const hitY = H - kbH, top = staffH;
     kb.layout(0, hitY, W, kbH);
     const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#0b1023'); g.addColorStop(1, '#141c3a');
@@ -235,6 +237,7 @@ const Game = (() => {
     for (let i = 0; i < notes.length; i++) {
       const n = notes[i], yb = hitY - (n.start - t) * ppb;
       if (yb < top - 4) break;
+      if (hidden && n.mine && !n.state) continue;
       const hgt = Math.max(14, n.dur * ppb - 3), yt = yb - hgt;
       if (yt > hitY) continue;
       const r = kb.rect(n.midi), pad = r.black ? 0 : Math.min(4, r.w * 0.1);
@@ -255,7 +258,7 @@ const Game = (() => {
     // קו הפגיעה + מקלדת
     ctx.fillStyle = waiting ? '#fbbf24' : '#a78bfa'; ctx.fillRect(0, hitY - 3, W, 3);
     let hint = null;
-    if (mode === 'wait' && waiting) { const nx = nextMine(); if (nx) { hint = new Map(); for (let i = p0; i < notes.length && notes[i].start <= nx.start + 0.06; i++) if (notes[i].mine && !notes[i].state) hint.set(notes[i].midi, notes[i].hand); } }
+    if (mode === 'wait' && waiting && (!hidden || stepWrong || now - waitT0 > 4000)) { const nx = nextMine(); if (nx) { hint = new Map(); for (let i = p0; i < notes.length && notes[i].start <= nx.start + 0.06; i++) if (notes[i].mine && !notes[i].state) hint.set(notes[i].midi, notes[i].hand); } }
     const heldSet = new Map(Input.heldNotes().map(h => [h.midi, h]));
     kb.draw(ctx, m => {
       const f = flashes.get(m);
@@ -349,5 +352,5 @@ const Game = (() => {
     ctx.restore(); ctx.textBaseline = 'alphabetic';
   }
 
-  return { init, start, stop, pause, skip, setTempo, recorded, get time() { return t; }, get running() { return running; }, get tempo() { return opts.tempo; } };
+  return { init, start, stop, pause, skip, setTempo, recorded, get time() { return t; }, get running() { return running; }, get waitingFor() { if (!running || mode !== 'wait' || !waiting) return null; const nx = nextMine(); return nx ? nx.midi : null; }, get tempo() { return opts.tempo; } };
 })();

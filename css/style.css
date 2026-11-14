@@ -258,11 +258,7 @@ input[type=range] { width: 100%; accent-color: var(--acc); height: 32px; }
   #scr-result .pad { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: center; max-width: 1000px; }
   #scr-result .rgrid { margin-top: 0; }
 
-  /* הגדרות: שני טורים */
-  #setBody { columns: 2 340px; column-gap: 16px; max-width: 1180px; }
-  #setBody .set, #setBody h3.sec { break-inside: avoid; }
-  #setBody h3.sec { break-after: avoid; }
-  #setBody .link { display: block; }
+  #setBody { max-width: 860px; }
 }
 
 /* טלפון שוכב לרוחב: מעט גובה — הכול קומפקטי יותר */
@@ -329,3 +325,10 @@ input[type=range] { width: 100%; accent-color: var(--acc); height: 32px; }
 
 .card b[dir], .card small[dir], .webitem b, .webitem small { text-align: right; unicode-bidi: plaintext; }
 #sgTitle, #sgComposer { unicode-bidi: plaintext; }
+
+/* ---- אתגר, הפתעה וקטגוריות גדולות ---- */
+.daily.surprise { background: linear-gradient(120deg, #22c55e, #0ea5e9); }
+.daily u[data-skip] { text-decoration: none; background: rgba(255,255,255,.25); padding: 1px 8px; border-radius: 999px; font-weight: 700; white-space: nowrap; }
+.cat .cnt { font-size: 13px; color: var(--muted); font-weight: 600; margin-inline-start: 6px; }
+.card.add.more { min-height: 0; }
+.card.add.more b { color: var(--acc); }
