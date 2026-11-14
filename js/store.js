@@ -9,7 +9,8 @@ const Store = (() => {
   if (!d.v3) { d.v3 = 1; d.settings.latency = 140; }
   if (!d.v4) { d.v4 = 1; d.settings.latency = 60; d.settings.tune = 0; } // גרסה 2 של מנוע ההאזנה: חותמת זמן להקשה
   d.videos = d.videos || {};
-  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) { /* אין מקום / מצב פרטי */ } };
+  // מחזיר false אם השמירה נכשלה (אין מקום במכשיר / מצב פרטי)
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(d)); return true; } catch (e) { return false; } };
   return { d, save, KEY };
 })();
 const CFG = Store.d.settings;

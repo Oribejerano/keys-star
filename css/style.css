@@ -311,3 +311,21 @@ input[type=range] { width: 100%; accent-color: var(--acc); height: 32px; }
   #smCv { height: 72px; margin-top: 6px; }
   #toast { top: 10%; font-size: 17px; padding: 11px 20px; }
 }
+
+/* ---- שירים מהאינטרנט ---- */
+.weblist { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.webitem { background: var(--panel); border-radius: 18px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; text-align: right; box-shadow: var(--shadow); min-width: 0; }
+.webitem > i { font-style: normal; font-size: 22px; width: 42px; height: 42px; display: grid; place-items: center; border-radius: 13px; background: linear-gradient(135deg, #bae6fd, #c7d2fe); flex: none; }
+.webitem b { display: block; font-size: 15.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.webitem small { color: var(--muted); font-size: 12.5px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.webitem .go { flex: none; font-weight: 800; font-size: 13.5px; color: var(--acc); background: var(--panel2); padding: 7px 11px; border-radius: 999px; }
+.webitem.busy { opacity: .7; }
+.webitem:active { transform: scale(.98); }
+.weblist .btn.wide, .webnote, .webmsg { grid-column: 1 / -1; }
+.webmsg { color: var(--muted); font-size: 16px; padding: 14px 4px; display: flex; align-items: center; gap: 10px; }
+.webnote { color: var(--muted); font-size: 12.5px; line-height: 1.5; padding: 2px 4px 8px; }
+.spin { width: 18px; height: 18px; border-radius: 50%; border: 3px solid var(--panel2); border-top-color: var(--acc); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.card b[dir], .card small[dir], .webitem b, .webitem small { text-align: right; unicode-bidi: plaintext; }
+#sgTitle, #sgComposer { unicode-bidi: plaintext; }

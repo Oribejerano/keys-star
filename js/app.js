@@ -51,8 +51,8 @@
   // ---------- בית ----------
   // כל קטגוריה מקבלת צבע וסמל משלה — כך קל לזהות שירים במבט
   const LOOK = { known: ['#fbbf24', '#fb7185', '🎈'], israeli: ['#38bdf8', '#34d399', '🌟'], classic: ['#a78bfa', '#6366f1', '🎻'], disney: ['#60a5fa', '#c084fc', '🏰'],
-    ilnew: ['#f472b6', '#a78bfa', '🎤'], rock: ['#fb923c', '#ef4444', '🎸'], mine: ['#f472b6', '#fb923c', '💖'] };
-  const ORDER = ['known', 'israeli', 'disney', 'ilnew', 'classic', 'rock', 'mine'];
+    ilnew: ['#f472b6', '#a78bfa', '🎤'], rock: ['#fb923c', '#ef4444', '🎸'], web: ['#38bdf8', '#818cf8', '🌐'], mine: ['#f472b6', '#fb923c', '💖'] };
+  const ORDER = ['known', 'israeli', 'disney', 'ilnew', 'classic', 'rock', 'web', 'mine'];
   const catName = id => ((CATS.find(c => c[0] === id) || [])[1] || '').replace(/^\S+\s/, '');
   // לכל שיר תמונה וצבעים משלו (לשירים המובנים — תמונה שמתאימה לשיר; לשירים שנוספו — לפי השם)
   const PIC = { twinkle: '⭐', jacob: '😴', yonatan: '🌳', birthday: '🎂', jingle: '🔔', hatikvah: '🇮🇱', london: '🌉', yankee: '🎩', saints: '🎺', susanna: '🪕',
@@ -66,7 +66,7 @@
   const diff = lv => lv <= 2 ? ['easy', 'קל'] : lv === 3 ? ['mid', 'בינוני'] : ['hard', 'מאתגר'];
   function cardHtml(s) {
     const [k, t] = diff(s.level || 3);
-    return `<button class="card" data-song="${s.id}">${coverHtml(s)}<b>${esc(s.title)}</b><small>${esc(s.composer || '')}</small><div class="row"><span class="diff ${k}">${t}</span>${starHtml(starsOf(s.id))}</div></button>`;
+    return `<button class="card" data-song="${s.id}">${coverHtml(s)}<b dir="auto">${esc(s.title)}</b><small dir="auto">${esc(s.composer || '')}</small><div class="row"><span class="diff ${k}">${t}</span>${starHtml(starsOf(s.id))}</div></button>`;
   }
   function renderHome() {
     renderStats();
@@ -89,7 +89,8 @@
     let html = '';
     if (query) {
       const q = query.toLowerCase(), found = allSongs().filter(s => (s.title + ' ' + (s.composer || '')).toLowerCase().includes(q));
-      html = found.length ? `<div class="cat">נמצאו ${found.length} שירים</div><div class="grid">${found.map(cardHtml).join('')}</div>` : '<div class="empty"><i>🔎</i>לא מצאתי שיר כזה באפליקציה</div>';
+      html = found.length ? `<div class="cat">🎵 באפליקציה (${found.length})</div><div class="grid">${found.map(cardHtml).join('')}</div>` : '';
+      html += '<div class="cat">🌐 מהאינטרנט</div><div id="webRes" class="weblist"></div>';
     } else for (const cid of cats) {
       if (catFilter !== 'all' && catFilter !== cid) continue;
       const songs = allSongs().filter(s => s.cat === cid);
@@ -98,6 +99,7 @@
       html += '</div>';
     }
     $('songList').innerHTML = html;
+    if (query) webSearch(query);
   }
   $('scr-home').addEventListener('click', e => {
     if (e.target.closest('#homeCal')) { startCal(); return; }
@@ -108,6 +110,56 @@
   });
   $('askInput').addEventListener('input', e => { query = e.target.value.trim(); renderHome(); });
   $('askInput').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
+
+  // ---------- שירים מהאינטרנט (BitMidi) ----------
+  let webT = 0, webQ = '', webPage = 0, webItems = [];
+  function webRender(state) {
+    const el = $('webRes'); if (!el) return;
+    if (state === 'wait') { el.innerHTML = '<div class="webmsg"><span class="spin"></span> מחפשת באינטרנט…</div>'; return; }
+    if (state === 'err') { el.innerHTML = '<div class="webmsg">😕 אין חיבור לאינטרנט כרגע</div>'; return; }
+    if (!webItems.length) { el.innerHTML = `<div class="webmsg">לא נמצא באינטרנט${/[֐-׿]/.test(webQ) ? ' — כדאי לנסות את שם השיר באנגלית (למשל: Let it be)' : ''}</div>`; return; }
+    const have = new Set(D.mine.map(s => s.src));
+    el.innerHTML = webItems.map(it => `<button class="webitem" data-web="${it.id}"><i>🎵</i><div class="grow"><b dir="auto">${esc(it.title)}</b><small dir="auto">${esc(it.artist || 'אמן לא ידוע')} · ${it.plays.toLocaleString('he-IL')} השמעות</small></div><span class="go">${have.has('bitmidi:' + it.id) ? '✓ יש' : '＋ להוסיף'}</span></button>`).join('') +
+      (webItems.more ? '<button class="btn ghost wide" id="webMore">עוד תוצאות</button>' : '') +
+      '<div class="webnote">השירים מגיעים מהמאגר BitMidi. כל שיר עובר צמצום אוטומטי למנגינה (יד ימין) ובס (יד שמאל), והאיכות משתנה משיר לשיר.</div>';
+  }
+  function webSearch(q) {
+    if (q === webQ && webItems.length) return webRender();
+    clearTimeout(webT); webRender('wait');
+    if (q.length < 2) { $('webRes').innerHTML = '<div class="webmsg">הקלידי לפחות שתי אותיות</div>'; return; }
+    webT = setTimeout(async () => {
+      try {
+        const r = await WebSongs.search(q, 0);
+        if (q !== query) return;
+        webQ = q; webPage = 0; webItems = r.items; webItems.more = r.pages > 1; webRender();
+      } catch (e) { if (q === query) webRender('err'); }
+    }, 550);
+  }
+  $('songList').addEventListener('click', async e => {
+    if (e.target.closest('#webMore')) {
+      const b = e.target.closest('#webMore'); b.disabled = true; b.textContent = 'טוענת…';
+      try { const r = await WebSongs.search(webQ, webPage + 1); webPage++; const more = r.page + 1 < r.pages; webItems = webItems.concat(r.items); webItems.more = more; webRender(); }
+      catch (err) { toast('😕 אין חיבור לאינטרנט כרגע', 2200); b.disabled = false; b.textContent = 'עוד תוצאות'; }
+      return;
+    }
+    const w = e.target.closest('[data-web]'); if (!w) return;
+    const it = webItems.find(x => String(x.id) === w.dataset.web); if (!it) return;
+    const exist = D.mine.find(s => s.src === 'bitmidi:' + it.id);
+    if (exist) return openSong(exist.id);
+    if (w.classList.contains('busy')) return;
+    w.classList.add('busy'); w.querySelector('.go').textContent = 'טוענת…';
+    try {
+      const song = await WebSongs.load(it);
+      D.mine.push(song);
+      if (Store.save() === false) { D.mine.pop(); toast('אין מספיק מקום במכשיר — כדאי למחוק כמה שירים מ"מהאינטרנט"', 3500); webRender(); return; }
+      Snd.chime(true); toast('השיר נוסף! 🎉', 1600);
+      $('askInput').value = ''; query = '';
+      openSong(song.id);
+    } catch (err) {
+      toast(err.message === 'net' || err instanceof TypeError ? '😕 אין חיבור לאינטרנט כרגע' : 'לא הצלחתי לקרוא את השיר הזה — נסי תוצאה אחרת', 3000);
+      webRender();
+    }
+  });
 
   function saveNew(song) {
     D.mine.push(song); Store.save();
