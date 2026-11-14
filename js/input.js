@@ -11,6 +11,8 @@ const Input = (() => {
 
   // ---- מגע ----
   function touch(midi, down) {
+    // כשהמיקרופון מקשיב, רק הפסנתר האמיתי נחשב: המקלדת שעל המסך לא מנגנת ולא מקדמת
+    if (mic.on) return;
     if (down) { Snd.unlock(); Snd.note(midi, 0.6, 0.75); emit('on', midi, 'touch'); }
     else emit('off', midi, 'touch');
   }
