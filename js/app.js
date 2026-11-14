@@ -96,10 +96,6 @@
     $('adRemove').hidden = !D.wishes.some(w => w.title === item.title);
     go('add');
   }
-  $('adYt').onclick = () => {
-    const q = `${pendingAdd.title} ${pendingAdd.cat === 'mine' ? '' : pendingAdd.artist} piano tutorial easy`;
-    window.open('https://www.youtube.com/results?search_query=' + encodeURIComponent(q), '_blank', 'noopener');
-  };
   $('adRec').onclick = () => startRecord();
   $('adMidi').onclick = () => $('midiFile').click();
   $('adRemove').onclick = () => { D.wishes = D.wishes.filter(w => w.title !== pendingAdd.title); Store.save(); go('home'); };
