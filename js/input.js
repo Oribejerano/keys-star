@@ -96,27 +96,38 @@ const Input = (() => {
   // שומר את כיוון הכלי שנלמד, כדי שבפעם הבאה ההאזנה תתחיל כבר מכוונת
   function syncTune() { if (det && Math.abs((CFG.tune || 0) - det.tune) > 0.5) { CFG.tune = Math.round(det.tune * 10) / 10; Store.save(); } }
 
-  // מקליט דוגמה גולמית מהמיקרופון (לכיוונון המנוע מול האורגנית האמיתית) ומחזיר קובץ WAV
-  function recordSample(sec, onProgress) {
-    return new Promise((resolve, reject) => {
-      if (!mic.on || !srcNode) return reject(new Error('המיקרופון כבוי'));
-      const ac = Snd.ctx(), sp = ac.createScriptProcessor(4096, 1, 1), mute = ac.createGain(), chunks = [];
-      const total = Math.round(sec * ac.sampleRate); let n = 0;
-      mute.gain.value = 0;
-      sp.onaudioprocess = e => {
-        const d = e.inputBuffer.getChannelData(0); chunks.push(new Float32Array(d)); n += d.length;
-        if (onProgress) onProgress(Math.min(1, n / total));
-        if (n < total) return;
-        sp.onaudioprocess = null; try { srcNode.disconnect(sp); sp.disconnect(); mute.disconnect(); } catch (err) { /* כבר מנותק */ }
-        const buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf), w = (o, str) => { for (let i = 0; i < str.length; i++) v.setUint8(o + i, str.charCodeAt(i)); };
-        w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
-        v.setUint32(24, ac.sampleRate, true); v.setUint32(28, ac.sampleRate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, n * 2, true);
-        let o = 44; for (const c of chunks) for (let i = 0; i < c.length; i++, o += 2) v.setInt16(o, Math.max(-1, Math.min(1, c[i])) * 32767, true);
-        resolve(new Blob([buf], { type: 'audio/wav' }));
-      };
-      srcNode.connect(sp); sp.connect(mute); mute.connect(ac.destination);
-    });
+  // מקליט את האות הגולמי מהמיקרופון (להקלטות הכיוונון). t0 = הרגע (בשעון performance.now) של הדגימה הראשונה
+  function startRec(maxSec) {
+    if (!mic.on || !srcNode) return null;
+    const ac = Snd.ctx(), sp = ac.createScriptProcessor(4096, 1, 1), mute = ac.createGain(), chunks = [];
+    const max = Math.round(maxSec * ac.sampleRate); let n = 0, t0 = 0, done = false;
+    mute.gain.value = 0;
+    sp.onaudioprocess = e => {
+      if (done) return;
+      const d = e.inputBuffer.getChannelData(0);
+      if (!t0) t0 = performance.now() - d.length / ac.sampleRate * 1000;
+      if (n < max) { chunks.push(new Float32Array(d)); n += d.length; }
+    };
+    srcNode.connect(sp); sp.connect(mute); mute.connect(ac.destination);
+    return {
+      get t0() { return t0; }, get sec() { return n / ac.sampleRate; },
+      stop() {
+        done = true; sp.onaudioprocess = null;
+        try { srcNode && srcNode.disconnect(sp); sp.disconnect(); mute.disconnect(); } catch (err) { /* כבר מנותק */ }
+        const pcm = new Int16Array(n); let o = 0;
+        for (const c of chunks) for (let i = 0; i < c.length; i++) pcm[o++] = Math.max(-1, Math.min(1, c[i])) * 32767;
+        return { pcm, sr: ac.sampleRate };
+      },
+    };
+  }
+  // נתוני המיקרופון והמנוע, לצירוף להקלטות הכיוונון
+  function micInfo() {
+    const ac = Snd.ctx(), tr = stream && stream.getAudioTracks()[0], ts = tr && tr.getSettings ? tr.getSettings() : {};
+    return {
+      sr: ac.sampleRate, baseLatency: ac.baseLatency, outputLatency: ac.outputLatency, N: det ? det.N : 0, tune: det ? det.tune : 0, slowEvery,
+      mic: tr ? tr.label : '', ec: ts.echoCancellation, ns: ts.noiseSuppression, agc: ts.autoGainControl, ch: ts.channelCount, micLatency: ts.latency,
+    };
   }
 
-  return { on, emit, touch, heldNotes, initMIDI, midi, startMic, stopMic, setExpected, syncTune, recordSample, mic, get micOn() { return mic.on; } };
+  return { on, emit, touch, heldNotes, initMIDI, midi, startMic, stopMic, setExpected, syncTune, startRec, micInfo, mic, get micOn() { return mic.on; } };
 })();

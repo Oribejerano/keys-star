@@ -140,3 +140,15 @@ input[type=range] { width: 100%; accent-color: var(--acc); height: 32px; }
 #homeCal { background: linear-gradient(120deg, #0f766e, #2563eb); margin-bottom: 8px; }
 .set .btns { margin-top: 10px; }
 .set .btn { padding: 10px 14px; font-size: 15px; }
+
+.smrow { display: flex; align-items: center; gap: 8px; }
+.smrow .grow { min-width: 0; }
+.smrow small { margin-top: 2px; }
+.smhave { font-style: normal; color: var(--ok); font-weight: 600; }
+.warnbox { background: #7f1d1d; color: #fecaca; margin-top: 10px; }
+.smrec { text-align: center; }
+#smBig { font-size: clamp(54px, 15vw, 110px); font-weight: 800; line-height: 1.15; color: var(--acc); min-height: 1.2em; transition: color .15s; }
+#smBig.ok { color: var(--ok); }
+#smHint { font-size: 18px; font-weight: 600; min-height: 26px; }
+#smCv { width: 100%; height: clamp(84px, 16vw, 150px); display: block; margin: 14px 0 2px; border-radius: 0 0 8px 8px; }
+#smBar { background: var(--acc); }

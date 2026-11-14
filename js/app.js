@@ -19,6 +19,7 @@
     $('app').classList.toggle('full', !['home', 'chords', 'settings'].includes(name));
     if (name !== 'game') { smartTok++; Game.stop(); }
     if (name === 'chords') { ensureMic(); Chords.show(); } else Chords.hide();
+    if (name === 'samples') Samples.show(); else Samples.hide();
     cancelAnimationFrame(setRaf);
     if (name === 'home') renderHome();
     if (name === 'settings') renderSettings();
@@ -278,8 +279,8 @@
       `<div class="set"><div class="r"><span>פיצוי השהיה (מתכוונן לבד)</span><b>${CFG.latency} אלפיות שנייה</b></div>
         <input type="range" data-k="latency" min="0" max="300" step="10" value="${CFG.latency}">
         <div class="r"><span>כיוון הכלי שנלמד</span><b>${(CFG.tune || 0) > 0 ? '+' : ''}${Math.round(CFG.tune || 0)} סנט</b></div></div>` +
-      `<div class="set"><div class="r"><span>🎙️ הקלטת דוגמה לכיוונון</span><button class="btn ghost" id="setSample">הקלטה (30 שניות)</button></div>
-        <small id="sampleInfo">מקליט חצי דקה של נגינה לקובץ, כדי שאפשר יהיה לכוונן את ההאזנה בדיוק לאורגנית שלכם. נגני קלידים בודדים, כמה אקורדים, ודברו קצת ברקע.</small></div>` +
+      `<div class="set"><div class="r"><span>🎙️ הקלטות לכיוונון</span><button class="btn ghost" data-go="samples">פתיחה</button></div>
+        <small id="sampleInfo">להורים: מקליטים כאן את האורגנית האמיתית (קלידים, אקורדים, רעשי רקע), שומרים ושולחים — כדי לכוונן את ההאזנה בדיוק אליה.</small></div>` +
       `<div class="set"><div class="r"><span>🎹 חיבור MIDI</span><b>${Input.midi.ok ? esc(Input.midi.devices.join(', ')) : navigator.requestMIDIAccess ? 'לא מחובר' : 'לא נתמך בדפדפן הזה'}</b></div><small>חיבור האורגנית בכבל USB נותן את הזיהוי המדויק ביותר (נתמך בכרום במחשב ובאנדרואיד).</small></div>` +
       chk('backing', 'ליווי אוטומטי', 'האפליקציה מנגנת את היד שאת לא מנגנת. כבוי אוטומטית כשהמיקרופון פעיל.') +
       chk('metro', 'מטרונום') + chk('staff', 'הצגת חמשה עם תווים') +
@@ -288,20 +289,7 @@
     $('setBody').querySelector('[data-k=names]').value = CFG.names;
     $('setReset').onclick = () => { if (confirm('לאפס כוכבים, ניקוד ורצף? (השירים שהוספת יישארו)')) { D.prog = {}; D.xp = 0; D.streak = { last: '', n: 0 }; D.chordBest = 0; Store.save(); toast('אופס'); } };
     $('setCal').onclick = () => startCal();
-    $('setSample').onclick = async () => {
-      Snd.unlock(); await ensureMic();
-      if (!Input.micOn) return;
-      const info = $('sampleInfo'), btn = $('setSample'); btn.disabled = true;
-      try {
-        const blob = await Input.recordSample(30, f => { const el = $('sampleInfo'); if (el) el.textContent = `⏺ מקליטה… ${Math.round(f * 30)} / 30 שניות`; });
-        const file = new File([blob], 'piano-sample.wav', { type: 'audio/wav' });
-        let shared = false;
-        if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: 'דוגמת נגינה' }); shared = true; } catch (err) { /* בוטל — מורידים במקום */ } }
-        if (!shared) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'piano-sample.wav'; document.body.appendChild(a); a.click(); a.remove(); }
-        if ($('sampleInfo')) $('sampleInfo').textContent = 'ההקלטה נשמרה כקובץ piano-sample.wav. העבירו אותו למחשב, לתיקיית הפרויקט.';
-      } catch (err) { info.textContent = err.message || 'ההקלטה נכשלה'; }
-      if ($('setSample')) $('setSample').disabled = false;
-    };
+    Samples.count().then(n => { const el = $('sampleInfo'); if (el && n) el.textContent = n === 1 ? 'הקלטה אחת שמורה במכשיר.' : `${n} הקלטות שמורות במכשיר.`; }).catch(() => {});
     ensureMic();
     const st = CFG.names === 'letters' ? 'letters' : 'sol';
     const loop = () => {
@@ -362,6 +350,7 @@
   // ---------- אתחול ----------
   Game.init($('gameCv'));
   Chords.init($('chCv'), addXP);
+  Samples.init({ toast, ensureMic });
   Input.initMIDI();
   renderHome();
   window.App = { go, openSong };
