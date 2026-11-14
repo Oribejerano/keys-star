@@ -4,7 +4,7 @@ const Store = (() => {
   let d = null;
   try { d = JSON.parse(localStorage.getItem(KEY)); } catch (e) { d = null; }
   d = Object.assign({ prog: {}, xp: 0, streak: { last: '', n: 0 }, mine: [], chordBest: 0 }, d || {});
-  d.settings = Object.assign({ names: 'sol', mic: false, sens: 40, latency: 120, metro: false, backing: true, staff: true }, d.settings || {});
+  d.settings = Object.assign({ names: 'sol', mic: true, sens: 40, latency: 120, metro: false, backing: true, staff: true }, d.settings || {});
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) { /* אין מקום / מצב פרטי */ } };
   return { d, save, KEY };
 })();
