@@ -332,3 +332,5 @@ input[type=range] { width: 100%; accent-color: var(--acc); height: 32px; }
 .cat .cnt { font-size: 13px; color: var(--muted); font-weight: 600; margin-inline-start: 6px; }
 .card.add.more { min-height: 0; }
 .card.add.more b { color: var(--acc); }
+
+.ver { color: var(--muted); font-size: 12px; text-align: center; margin: 18px 0 6px; direction: ltr; }

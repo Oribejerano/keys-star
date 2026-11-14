@@ -421,7 +421,8 @@
         <div class="r"><span>כיוון הכלי שנלמד</span><b>${(CFG.tune || 0) > 0 ? '+' : ''}${Math.round(CFG.tune || 0)} סנט</b></div></div>` +
       `<div class="set"><div class="r"><span>🎹 חיבור MIDI</span><b>${Input.midi.ok ? esc(Input.midi.devices.join(', ')) : navigator.requestMIDIAccess ? 'לא מחובר' : 'לא נתמך בדפדפן הזה'}</b></div><small>אורגנית עם יציאת USB נותנת את הזיהוי המדויק ביותר (בכרום במחשב ובאנדרואיד).</small></div>` +
       `<div class="set"><small>📱 להתקנה כאפליקציה במסך מלא: בספארי "שיתוף" ← "הוסף למסך הבית".</small></div>` +
-      `<button class="link danger" id="setReset">איפוס כל ההתקדמות</button>`;
+      `<button class="link danger" id="setReset">איפוס כל ההתקדמות</button>` +
+      `<div class="ver">גרסה ${BUILD}</div>`;
     $('setBody').querySelector('[data-k=names]').value = CFG.names;
     $('setReset').onclick = () => { if (confirm('לאפס כוכבים, ניקוד ורצף? (השירים שהוספת יישארו)')) { D.prog = {}; D.xp = 0; D.streak = { last: '', n: 0 }; D.chordBest = 0; Store.save(); toast('אופס'); } };
     $('setPack').onclick = () => $('packFile').click();
@@ -479,6 +480,23 @@
     if (!goFull()) toast('במכשיר הזה: "שיתוף" ← "הוסף למסך הבית", ואז האפליקציה נפתחת במסך מלא', 4500);
   };
   if (standalone()) $('fsBtn').hidden = true;
+
+  // ---------- עדכון אוטומטי ----------
+  // דף שנשמר במטמון (או אפליקציה שהוצמדה למסך הבית) לא תמיד נטען מחדש לבד. בכל פתיחה, ובכל חזרה למסך,
+  // בודקים אם יש גרסה חדשה באתר — ואם כן, טוענים אותה (רק כשלא באמצע שיר).
+  const BUILD = '20261114i';
+  async function checkUpdate() {
+    try {
+      const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
+      const v = (await r.json()).v;
+      if (!v || v === BUILD || Game.running || recording) return;
+      // פעם אחת לכל גרסה — כדי לא להיכנס ללולאה אם השרת עוד לא סיים להתעדכן
+      let tried = ''; try { tried = sessionStorage.getItem('ksUpd') || ''; sessionStorage.setItem('ksUpd', v); } catch (e) { /* מצב פרטי */ }
+      if (tried !== v) location.replace(location.pathname + '?v=' + v);
+    } catch (e) { /* בלי אינטרנט — ממשיכים עם מה שיש */ }
+  }
+  checkUpdate();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
 
   // ---------- אתחול ----------
   Game.init($('gameCv'));
