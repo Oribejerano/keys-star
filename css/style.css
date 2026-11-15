@@ -336,3 +336,6 @@ input[type=range] { width: 100%; accent-color: var(--acc); height: 32px; }
 .ver { color: var(--muted); font-size: 12px; text-align: center; margin: 18px 0 6px; direction: ltr; }
 .daily.loading { background: linear-gradient(120deg, #a78bfa, #60a5fa); }
 .daily.loading .spin { border-color: rgba(255,255,255,.35); border-top-color: #fff; width: 22px; height: 22px; }
+.hud .icon.rec { color: #ef4444; font-size: 16px; }
+.hud .icon.rec.on { width: auto; padding: 0 12px; background: #ef4444; color: #fff; font-size: 15px; font-weight: 800; animation: recpulse 1.6s ease-in-out infinite; }
+@keyframes recpulse { 50% { opacity: .7; } }

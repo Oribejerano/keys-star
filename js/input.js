@@ -92,7 +92,13 @@ const Input = (() => {
     if (slowEvery === 2 && procAvg > 5) slowEvery = 4;
   }
   // המשחק מודיע לאילו תווים הוא מצפה עכשיו; הם מזוהים בסף רגיש יותר
-  function setExpected(list) { expected = list && list.length ? new Set(list) : null; }
+  let expKey = '', expHook = null;
+  function setExpected(list) {
+    expected = list && list.length ? new Set(list) : null;
+    if (expHook) { const k = expected ? [...expected].sort((a, b) => a - b).join(',') : ''; if (k !== expKey) { expKey = k; expHook(expected ? [...expected] : []); } }
+  }
+  // מאזין לשינויים ברשימת התווים הצפויים (להקלטת נגינה לכיוונון)
+  function onExpected(fn) { expHook = fn; expKey = '\u0000'; }
   // שומר את כיוון הכלי שנלמד, כדי שבפעם הבאה ההאזנה תתחיל כבר מכוונת
   function syncTune() {
     if (!det) return;
@@ -138,5 +144,5 @@ const Input = (() => {
     };
   }
 
-  return { on, emit, touch, heldNotes, initMIDI, midi, startMic, stopMic, setExpected, syncTune, resetRef, startRec, micInfo, mic, get micOn() { return mic.on; } };
+  return { on, emit, touch, heldNotes, initMIDI, midi, startMic, stopMic, setExpected, syncTune, resetRef, startRec, micInfo, onExpected, get expected() { return expected ? [...expected] : []; }, mic, get micOn() { return mic.on; } };
 })();

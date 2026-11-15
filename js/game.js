@@ -11,6 +11,10 @@ const Game = (() => {
   const hudCache = {};
   let stepAt = -1, stepSize = 0, loM = 0, hiM = 127;
   let rec = [], recT0 = 0; const recOn = new Map();
+  // יומן החלטות (להקלטת נגינה לכיוונון): כל פגיעה, טעות ופספוס, עם התו שציפינו לו
+  let logFn = null;
+  const log = o => { if (logFn) logFn(o); };
+  const bt = x => Math.round(x * 1000) / 1000;
 
   // הקלטה: מחזיר את מה שנוגן כרשימת תווים (פעימה = חצי שנייה, 120 פעימות לדקה)
   function recorded() {
@@ -62,6 +66,7 @@ const Game = (() => {
     combo = 0; score = 0; p0 = 0; waiting = false; stepWrong = false; pops = []; flashes.clear(); lastHit.clear();
     for (const k in hudCache) delete hudCache[k];
     setHud('hudBanner', opts.banner || ''); setHud('hudMsg', ''); $('hudMsg').classList.remove('on');
+    log({ k: 'start', mode, tempo: opts.tempo, arr: opts.arr, range: [bt(range[0]), bt(range[1])], bpm: song.bpm, id: song.id, title: song.title });
     running = true; paused = false; resize(); last = performance.now();
     raf = requestAnimationFrame(frame);
   }
@@ -70,7 +75,7 @@ const Game = (() => {
   function skip() {
     if (!running || mode !== 'wait') return;
     const nx = nextMine(); if (!nx) return;
-    for (let i = p0; i < notes.length && notes[i].start <= nx.start + 0.06; i++) if (notes[i].mine && !notes[i].state) { notes[i].state = 2; st.miss++; barErr(notes[i].start); }
+    for (let i = p0; i < notes.length && notes[i].start <= nx.start + 0.06; i++) if (notes[i].mine && !notes[i].state) { notes[i].state = 2; st.miss++; barErr(notes[i].start); log({ k: 'skip', m: notes[i].midi, b: bt(notes[i].start) }); }
     combo = 0; waiting = false; stepWrong = false; t = Math.max(t, nx.start);
   }
   function pause(p) { paused = p === undefined ? !paused : p; return paused; }
@@ -95,7 +100,7 @@ const Game = (() => {
     let nt = t + dt / spb;
     if (mode === 'wait') {
       const nx = nextMine();
-      if (nx && nt >= nx.start) { if (!waiting) waitT0 = performance.now(); nt = nx.start; waiting = true; }
+      if (nx && nt >= nx.start) { if (!waiting) { waitT0 = performance.now(); log({ k: 'wait', m: nx.midi, b: bt(nx.start) }); } nt = nx.start; waiting = true; }
     }
     const ci = Math.floor(nt - B.pickup + 1e-6);
     if (ci > clickIdx) {
@@ -112,7 +117,7 @@ const Game = (() => {
         Snd.note(n.midi, Math.min(2.5, n.dur * spb), n.hand === 'L' ? 0.4 : 0.7);
         flash(n.midi, COL[n.hand], Math.min(0.5, n.dur * spb));
       } else if (mode === 'play' && n.start < tj - WIN / spb) {
-        n.state = 2; st.miss++; combo = 0; barErr(n.start); pop('פספוס', n.midi, '#f87171');
+        n.state = 2; st.miss++; combo = 0; barErr(n.start); pop('פספוס', n.midi, '#f87171'); log({ k: 'miss', m: n.midi, b: bt(n.start) });
       }
     }
     while (p0 < notes.length && notes[p0].state) p0++;
@@ -149,7 +154,7 @@ const Game = (() => {
         doHit(h, stepWrong ? 'ok' : 'perfect');
         let left = stepN.filter(n => n !== h);
         // במיקרופון קשה לשמוע כל צליל באקורד — אם חסר רק אחד מתוך 3+, מקבלים את האקורד
-        if (e.src === 'mic' && stepSize >= 3 && left.length === 1) { doHit(left[0], 'perfect'); left = []; }
+        if (e.src === 'mic' && stepSize >= 3 && left.length === 1) { doHit(left[0], 'perfect', 'chord'); left = []; }
         if (!left.length) { waiting = false; stepWrong = false; }
       }
       else wrongNote(e, stepN);
@@ -172,11 +177,12 @@ const Game = (() => {
     if (best && bd * spb <= WIN) {
       const ds = bd * spb, perf = e.src === 'mic' ? 0.1 : 0.09;
       if (e.src === 'mic') st.offs.push((tj - best.start) * spb);
-      doHit(best, ds <= perf ? 'perfect' : ds <= GOOD ? 'good' : 'ok');
+      doHit(best, ds <= perf ? 'perfect' : ds <= GOOD ? 'good' : 'ok', e.src, Math.round((tj - best.start) * spb * 1000));
     } else wrongNote(e, near && (near.start - tj) * spb < 1.2 ? [near] : null);
   }
 
-  function doHit(n, j) {
+  function doHit(n, j, src, off) {
+    log({ k: 'hit', m: n.midi, b: bt(n.start), j, src, off });
     n.state = 1; n.judge = j; st[j]++; combo++; st.maxCombo = Math.max(st.maxCombo, combo);
     score += { perfect: 100, good: 70, ok: 40 }[j] * (1 + Math.min(1, Math.floor(combo / 10) * 0.1));
     lastHit.set(n.midi, performance.now());
@@ -184,10 +190,12 @@ const Game = (() => {
     pop(mode === 'wait' ? '✓' : { perfect: 'מושלם!', good: 'טוב!', ok: 'בסדר' }[j], n.midi, j === 'ok' ? '#fbbf24' : '#4ade80');
   }
   function wrongNote(e, expected) {
+    const want = expected ? expected.map(n => n.midi) : [];
     if (e.ghost) return;
-    if (e.src === 'mic' && (e.midi < loM - 2 || e.midi > hiM + 2)) return;
+    if (e.src === 'mic' && (e.midi < loM - 2 || e.midi > hiM + 2)) return log({ k: 'ign', m: e.midi, why: 'range', want });
     const lh = lastHit.get(e.midi);
-    if (e.src === 'mic' && lh && performance.now() - lh < 1500) return;
+    if (e.src === 'mic' && lh && performance.now() - lh < 1500) return log({ k: 'ign', m: e.midi, why: 'ring', want });
+    log({ k: 'wrong', m: e.midi, want, b: bt(t), src: e.src });
     st.wrong++; combo = 0; stepWrong = true; flash(e.midi, '#f87171', 0.35); barErr(Math.max(range[0], t));
     if (expected && expected.length) {
       const want = [...new Set(expected.map(n => nm(n.midi)))].join(' + ');
@@ -205,6 +213,7 @@ const Game = (() => {
     // הקדמה/איחור אופייני (חציון) של ההקשות — משמש לכיוונון עצמי של פיצוי ההשהיה
     const so = st.offs.slice().sort((x, y) => x - y);
     st.medOff = so.length >= 8 ? so[so.length >> 1] : null;
+    log({ k: 'end', acc: Math.round(acc * 1000) / 1000, perfect: st.perfect, good: st.good, ok: st.ok, miss: st.miss, wrong: st.wrong, total });
     if (opts.onFinish) opts.onFinish(Object.assign({}, st, { total, acc, stars, score: Math.round(score), mode, bars: B.bars, beats: B.beats, pickup: B.pickup }));
   }
 
@@ -352,5 +361,7 @@ const Game = (() => {
     ctx.restore(); ctx.textBaseline = 'alphabetic';
   }
 
-  return { init, start, stop, pause, skip, setTempo, recorded, get time() { return t; }, get running() { return running; }, get waitingFor() { if (!running || mode !== 'wait' || !waiting) return null; const nx = nextMine(); return nx ? nx.midi : null; }, get tempo() { return opts.tempo; } };
+  // מצב נוכחי (כשמתחילים להקליט באמצע שיר)
+  const snapshot = () => (running ? { k: 'snap', mode, tempo: opts.tempo, arr: opts.arr, range: [bt(range[0]), bt(range[1])], bpm: song.bpm, id: song.id, title: song.title, b: bt(t) } : null);
+  return { init, start, stop, pause, skip, setTempo, recorded, snapshot, setLogger(fn) { logFn = fn; }, get time() { return t; }, get running() { return running; }, get waitingFor() { if (!running || mode !== 'wait' || !waiting) return null; const nx = nextMine(); return nx ? nx.midi : null; }, get tempo() { return opts.tempo; } };
 })();

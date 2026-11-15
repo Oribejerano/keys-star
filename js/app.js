@@ -15,7 +15,7 @@
     document.querySelectorAll('.scr').forEach(s => s.classList.toggle('on', s.id === 'scr-' + name));
     document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('on', b.dataset.go === name));
     $('app').classList.toggle('full', !['home', 'chords', 'settings'].includes(name));
-    if (name !== 'game') { smartTok++; Game.stop(); }
+    if (name !== 'game') { smartTok++; Game.stop(); if (Samples.songOn) saveSongRec(); }
     if (name === 'chords') { ensureMic(); Chords.show(); } else Chords.hide();
     if (name === 'samples') Samples.show(); else Samples.hide();
     cancelAnimationFrame(setRaf);
@@ -288,6 +288,8 @@
     $('gPause').textContent = '⏸';
     ['gPause', 'gSlow', 'gFast', 'gTempo'].forEach(id => { $(id).style.display = mode === 'record' ? 'none' : ''; });
     $('gSkip').style.display = mode === 'wait' ? '' : 'none';
+    $('gRec').style.display = mode === 'record' ? 'none' : '';
+    recHud();
     Input.mic.peak = 0;
   }
   function launch(o) {
@@ -364,6 +366,29 @@
   }
   $('gExit').onclick = () => { if (recording) return endRecord(); go(curSong ? 'song' : 'home'); };
   $('gSkip').onclick = () => Game.skip();
+  // הקלטת הנגינה לשיפור ההאזנה: הצליל + כל החלטה של המשחק, נשמר בהקלטות (הגדרות ← להורים)
+  let recUi = 0;
+  function recHud() {
+    const on = Samples.songOn, b = $('gRec');
+    b.classList.toggle('on', on); $('gFlag').hidden = !on;
+    if (on) { const s = Math.floor(Samples.songSec); b.textContent = `⏹ ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; } else b.textContent = '⏺';
+  }
+  async function saveSongRec() {
+    clearInterval(recUi); if (!Samples.songOn) return;
+    const p = Samples.songStop(); recHud();
+    const m = await p;
+    if (m) toast('🎙️ ההקלטה נשמרה ✓ שולחים אותה מ: הגדרות ← להורים ← הקלטות', 4000);
+  }
+  $('gRec').onclick = async () => {
+    if (Samples.songOn) return saveSongRec();
+    if (recording) return;
+    Snd.unlock(); await ensureMic();
+    if (!Samples.songStart()) return;
+    toast('⏺ מקליטה! נגני כרגיל. אם האפליקציה טועה, לחצי 🚩', 3000);
+    clearInterval(recUi); recUi = setInterval(() => { recHud(); if (Samples.songSec >= Samples.SONG_MAX) { saveSongRec(); toast('ההקלטה הגיעה ל-4 דקות ונשמרה ✓', 3000); } }, 500);
+    recHud();
+  };
+  $('gFlag').onclick = () => { Samples.songFlag(); toast('🚩 סימנתי. תודה!', 900); };
   $('gPause').onclick = () => { $('gPause').textContent = Game.pause() ? '▶' : '⏸'; };
   const nudge = d => { const v = Math.max(0.4, Math.min(1.3, Math.round((Game.tempo + d) * 100) / 100)); Game.setTempo(v); $('gTempo').textContent = Math.round(v * 100) + '%'; };
   $('gSlow').onclick = () => nudge(-0.1);
@@ -487,12 +512,12 @@
   // ---------- עדכון אוטומטי ----------
   // דף שנשמר במטמון (או אפליקציה שהוצמדה למסך הבית) לא תמיד נטען מחדש לבד. בכל פתיחה, ובכל חזרה למסך,
   // בודקים אם יש גרסה חדשה באתר — ואם כן, טוענים אותה (רק כשלא באמצע שיר).
-  const BUILD = '20261114j';
+  const BUILD = '20261115a';
   async function checkUpdate() {
     try {
       const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
       const v = (await r.json()).v;
-      if (!v || v === BUILD || Game.running || recording) return;
+      if (!v || v === BUILD || Game.running || recording || Samples.songOn) return;
       // פעם אחת לכל גרסה — כדי לא להיכנס ללולאה אם השרת עוד לא סיים להתעדכן
       let tried = ''; try { tried = sessionStorage.getItem('ksUpd') || ''; sessionStorage.setItem('ksUpd', v); } catch (e) { /* מצב פרטי */ }
       if (tried !== v) location.replace(location.pathname + '?v=' + v);

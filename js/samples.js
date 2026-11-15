@@ -141,6 +141,7 @@ const Samples = (() => {
   }
   // כל מה שהמנוע מזהה בזמן ההקלטה נרשם: מתי הייתה ההקשה, וכמה זמן אחריה הגיע הזיהוי
   Input.on(e => {
+    if (srec && e.src === 'mic') srec.events.push({ p: performance.now(), t0: e.t0, on: e.type === 'on' ? 1 : 0, m: e.midi, g: e.ghost ? 1 : 0 });
     if (!rec || e.src !== 'mic' || !rec.h.t0) return;
     const now = performance.now(), t0 = e.t0 != null ? e.t0 : now;
     rec.events.push({ t: r3((t0 - rec.h.t0) / 1000), d: Math.round(now - t0), on: e.type === 'on' ? 1 : 0, m: e.midi, g: e.ghost ? 1 : 0 });
@@ -190,6 +191,61 @@ const Samples = (() => {
     toast((r.kind === 'noise' ? `נשמר ✓ זיהויי שווא: ${score.extra}` : score.total ? `נשמר ✓ זוהו בזמן אמת ${score.ok} מתוך ${score.total}` : 'ההקלטה נשמרה ✓') + pk, 3500);
   }
 
+  // ---- הקלטת נגינה של שיר (מתוך מסך הנגינה): הצליל, כל מה שהמנוע שמע וכל החלטה של המשחק ----
+  // (פגיעה / "טעות" / פספוס, ואיזה תו המשחק ציפה לשמוע) — כדי למצוא בדיוק איפה ההאזנה טעתה, ולתקן
+  const SONG_MAX = 240; // 4 דקות לכל היותר (כ-11MB)
+  let srec = null;
+  const stampOf = d => { const p2 = n => String(n).padStart(2, '0'); return `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`; };
+  function songStart() {
+    if (srec || rec) return false;
+    if (!Input.micOn) { toast('🎤 כדי להקליט צריך שהמיקרופון יהיה פעיל', 2800); return false; }
+    const h = Input.startRec(SONG_MAX + 2);
+    if (!h) { toast('ההקלטה לא התחילה', 2500); return false; }
+    Input.mic.peak = 0;
+    const now = performance.now();
+    srec = { h, log: [], events: [], flags: 0, date: new Date(), cfg: { latency: CFG.latency, tune: CFG.tune || 0, ref: CFG.ref || 0 }, env0: Input.micInfo() };
+    const snap = Game.snapshot(); if (snap) srec.log.push(Object.assign({ p: now }, snap, { exp: Input.expected }));
+    Game.setLogger(o => { if (srec) srec.log.push(Object.assign({ p: performance.now() }, o)); });
+    Input.onExpected(list => { if (srec) srec.log.push({ p: performance.now(), k: 'exp', m: list }); });
+    if (navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { if (srec) srec.lock = l; else l.release(); }).catch(() => {});
+    return true;
+  }
+  function songFlag() { if (!srec) return; srec.flags++; srec.log.push({ p: performance.now(), k: 'flag' }); }
+  // הקטנת קצב הדגימה פי 2 (48000 → 24000) עם מסנן — חצי מהגודל, ובלי לאבד שום דבר שחשוב לזיהוי תווים
+  function half(x) {
+    const H = [-0.0322, 0, 0.2822, 0.5, 0.2822, 0, -0.0322], n = x.length >> 1, out = new Int16Array(n);
+    for (let i = 0; i < n; i++) { let v = 0; for (let k = 0; k < 7; k++) { const j = 2 * i + k - 3; if (j >= 0 && j < x.length) v += H[k] * x[j]; } out[i] = Math.max(-32768, Math.min(32767, Math.round(v))); }
+    return out;
+  }
+  async function songStop() {
+    if (!srec) return null;
+    const r = srec; srec = null;
+    Game.setLogger(null); Input.onExpected(null);
+    if (r.lock) r.lock.release().catch(() => {});
+    const { pcm, sr } = r.h.stop(), dur = pcm.length / sr;
+    if (dur < 3 || !r.h.t0) { toast('ההקלטה קצרה מדי', 2000); return null; }
+    const t0 = r.h.t0, rel = p => r3((p - t0) / 1000);
+    const log = r.log.map(o => { const x = Object.assign({}, o); delete x.p; return Object.assign({ t: rel(o.p) }, x); });
+    const events = r.events.map(e => ({ t: rel(e.t0 != null ? e.t0 : e.p), d: e.t0 != null ? Math.round(e.p - e.t0) : null, on: e.on, m: e.m, g: e.g }));
+    const cnt = k => log.filter(o => o.k === k).length;
+    const score = { ok: cnt('hit'), wrong: cnt('wrong'), miss: cnt('miss') + cnt('skip'), flags: r.flags };
+    const first = log.find(o => o.k === 'start' || o.k === 'snap') || {};
+    const d = r.date, id = `song-${stampOf(d)}`;
+    const small = sr >= 44100, data = small ? half(pcm) : pcm, sr2 = small ? sr / 2 : sr;
+    const meta = { id, kind: 'song', title: first.title || '', date: d.getTime(), dur: Math.round(dur), sr: sr2, score, note: '', peak: r3(Input.mic.peak), sent: 0 };
+    const info = {
+      app: 'keys-star', v: 1, id, kind: 'song', title: first.title || '', songId: first.id || '', date: d.toISOString(), score, peak: meta.peak,
+      rate: { orig: sr, saved: sr2 }, cfg: r.cfg, log, events,
+      env: Object.assign(r.env0, { tuneEnd: Input.micInfo().tune, refEnd: Input.micInfo().ref, ua: navigator.userAgent, standalone: !!(navigator.standalone || matchMedia('(display-mode: standalone)').matches) }),
+    };
+    const buf = wav(data, sr2, info); meta.size = buf.byteLength;
+    await db.put(meta, buf);
+    files.set(id, new File([buf], `keys-${id}.wav`, { type: 'audio/wav' }));
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+    refresh();
+    return meta;
+  }
+
   // ---- שליחה, השמעה, מחיקה ----
   async function fileOf(m) {
     if (!files.has(m.id)) { const buf = await db.audio(m.id); if (buf) files.set(m.id, new File([buf], `keys-${m.id}.wav`, { type: 'audio/wav' })); }
@@ -225,8 +281,8 @@ const Samples = (() => {
   async function refresh() { metas = await db.list(); if (active && !rec) { render(); metas.forEach(m => fileOf(m).catch(() => {})); } }
   const mb = n => (n / 1048576).toFixed(1) + 'MB';
   function rowHtml(m) {
-    const k = KINDS[m.kind] || KINDS.free, d = new Date(m.date), p2 = n => String(n).padStart(2, '0');
-    const sc = m.kind === 'noise' ? `זיהויי שווא: ${m.score.extra}` : m.score && m.score.total ? `זוהו ${m.score.ok}/${m.score.total}` : '';
+    const k = m.kind === 'song' ? { icon: '🎵', title: 'נגינה: ' + esc(m.title || 'שיר') } : KINDS[m.kind] || KINDS.free, d = new Date(m.date), p2 = n => String(n).padStart(2, '0');
+    const sc = m.kind === 'song' ? `✓ ${m.score.ok} · ✗ ${m.score.wrong}${m.score.flags ? ` · 🚩 ${m.score.flags}` : ''}` : m.kind === 'noise' ? `זיהויי שווא: ${m.score.extra}` : m.score && m.score.total ? `זוהו ${m.score.ok}/${m.score.total}` : '';
     return `<div class="set smrow" data-id="${m.id}"><div class="grow"><b>${k.icon} ${k.title}</b>
       <small>${d.getDate()}.${d.getMonth() + 1} ${p2(d.getHours())}:${p2(d.getMinutes())} · ${m.dur} שניות · ${mb(m.size)}${sc ? ' · ' + sc : ''}${m.sent ? ' · ✓ נשלחה' : ''}${m.note ? '<br>' + esc(m.note) : ''}</small></div>
       <button class="icon" data-act="play" title="השמעה">${playing === m.id ? '⏹' : '▶'}</button><button class="icon" data-act="send" title="שליחה">📤</button><button class="icon" data-act="del" title="מחיקה">🗑</button></div>`;
@@ -251,6 +307,7 @@ const Samples = (() => {
     const cnt = k => metas.filter(m => m.kind === k).length;
     body.innerHTML = `<div class="tip">מקליטים כאן את האורגנית האמיתית, כדי לכוונן את ההאזנה בדיוק אליה. המסך אומר מה לנגן, וההקלטה נשמרת כאן במכשיר. בסוף לוחצים 📤 ושולחים. הכי טוב: להקליט את כל חמשת הסוגים, במקום ובעוצמה שבהם היא מנגנת בדרך כלל.</div>
       ${volatile ? '<div class="tip warnbox">הדפדפן לא מאפשר שמירה במכשיר (גלישה פרטית?). ההקלטות יישארו רק עד שסוגרים את הדף — שלחו אותן מיד.</div>' : ''}
+      <div class="tip">🎵 <b>האפליקציה אמרה "טעות" כשניגנה נכון?</b> מתוך שיר, לוחצים למעלה על ⏺ ומנגנים כרגיל. כשהאפליקציה טועה אפשר ללחוץ 🚩 (לא חובה). בסוף לוחצים ⏹ או יוצאים מהשיר. ההקלטה נשמרת כאן, ושולחים אותה עם 📤.</div>
       <h3>הקלטה חדשה</h3>
       <div class="ask"><input id="smNote" type="text" maxlength="120" placeholder="הערה (לא חובה): איזה צליל נבחר באורגנית, איפה המכשיר מונח" autocomplete="off" value="${esc(Store.d.sampleNote || '')}"></div>
       <div class="modes">${Object.keys(KINDS).map(k => `<button class="mode" data-kind="${k}"><b>${KINDS[k].icon} ${KINDS[k].title}</b><span>${KINDS[k].sub} · ${k === 'free' ? 'עד ' : ''}${secOf(k)} שניות${cnt(k) ? ` · <i class="smhave">✓ נשמרו ${cnt(k)}</i>` : ''}</span></button>`).join('')}</div>
@@ -288,5 +345,5 @@ const Samples = (() => {
   function hide() { if (!active) return; active = false; if (rec) cancel(); stopPlay(); }
   const count = () => db.list().then(l => l.length);
 
-  return { init, show, hide, count, KINDS };
+  return { init, show, hide, count, KINDS, songStart, songStop, songFlag, SONG_MAX, get songOn() { return !!srec; }, get songSec() { return srec ? srec.h.sec : 0; } };
 })();
