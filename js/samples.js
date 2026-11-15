@@ -141,7 +141,7 @@ const Samples = (() => {
   }
   // כל מה שהמנוע מזהה בזמן ההקלטה נרשם: מתי הייתה ההקשה, וכמה זמן אחריה הגיע הזיהוי
   Input.on(e => {
-    if (srec && e.src === 'mic') srec.events.push({ p: performance.now(), t0: e.t0, on: e.type === 'on' ? 1 : 0, m: e.midi, g: e.ghost ? 1 : 0 });
+    if (srec && e.src === 'mic') srec.events.push({ p: actx(), t0: e.ta, on: e.type === 'on' ? 1 : 0, m: e.midi, g: e.ghost ? 1 : 0 });
     if (!rec || e.src !== 'mic' || !rec.h.t0) return;
     const now = performance.now(), t0 = e.t0 != null ? e.t0 : now;
     rec.events.push({ t: r3((t0 - rec.h.t0) / 1000), d: Math.round(now - t0), on: e.type === 'on' ? 1 : 0, m: e.midi, g: e.ghost ? 1 : 0 });
@@ -195,6 +195,7 @@ const Samples = (() => {
   // (פגיעה / "טעות" / פספוס, ואיזה תו המשחק ציפה לשמוע) — כדי למצוא בדיוק איפה ההאזנה טעתה, ולתקן
   const SONG_MAX = 240; // 4 דקות לכל היותר (כ-11MB)
   let srec = null;
+  const actx = () => Snd.ctx().currentTime * 1000; // שעון השמע — אותו שעון של ההקלטה עצמה, בלי "זחילה"
   const stampOf = d => { const p2 = n => String(n).padStart(2, '0'); return `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`; };
   function songStart() {
     if (srec || rec) return false;
@@ -202,15 +203,15 @@ const Samples = (() => {
     const h = Input.startRec(SONG_MAX + 2);
     if (!h) { toast('ההקלטה לא התחילה', 2500); return false; }
     Input.mic.peak = 0;
-    const now = performance.now();
+    const now = actx();
     srec = { h, log: [], events: [], flags: 0, date: new Date(), cfg: { latency: CFG.latency, tune: CFG.tune || 0, ref: CFG.ref || 0 }, env0: Input.micInfo() };
     const snap = Game.snapshot(); if (snap) srec.log.push(Object.assign({ p: now }, snap, { exp: Input.expected }));
-    Game.setLogger(o => { if (srec) srec.log.push(Object.assign({ p: performance.now() }, o)); });
-    Input.onExpected(list => { if (srec) srec.log.push({ p: performance.now(), k: 'exp', m: list }); });
+    Game.setLogger(o => { if (srec) srec.log.push(Object.assign({ p: actx() }, o)); });
+    Input.onExpected(list => { if (srec) srec.log.push({ p: actx(), k: 'exp', m: list }); });
     if (navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { if (srec) srec.lock = l; else l.release(); }).catch(() => {});
     return true;
   }
-  function songFlag() { if (!srec) return; srec.flags++; srec.log.push({ p: performance.now(), k: 'flag' }); }
+  function songFlag() { if (!srec) return; srec.flags++; srec.log.push({ p: actx(), k: 'flag' }); }
   // הקטנת קצב הדגימה פי 2 (48000 → 24000) עם מסנן — חצי מהגודל, ובלי לאבד שום דבר שחשוב לזיהוי תווים
   function half(x) {
     const H = [-0.0322, 0, 0.2822, 0.5, 0.2822, 0, -0.0322], n = x.length >> 1, out = new Int16Array(n);
@@ -224,7 +225,7 @@ const Samples = (() => {
     if (r.lock) r.lock.release().catch(() => {});
     const { pcm, sr } = r.h.stop(), dur = pcm.length / sr;
     if (dur < 3 || !r.h.t0) { toast('ההקלטה קצרה מדי', 2000); return null; }
-    const t0 = r.h.t0, rel = p => r3((p - t0) / 1000);
+    const t0 = r.h.t0a, rel = p => r3((p - t0) / 1000);
     const log = r.log.map(o => { const x = Object.assign({}, o); delete x.p; return Object.assign({ t: rel(o.p) }, x); });
     const events = r.events.map(e => ({ t: rel(e.t0 != null ? e.t0 : e.p), d: e.t0 != null ? Math.round(e.p - e.t0) : null, on: e.on, m: e.m, g: e.g }));
     const cnt = k => log.filter(o => o.k === k).length;
@@ -235,7 +236,7 @@ const Samples = (() => {
     const meta = { id, kind: 'song', title: first.title || '', date: d.getTime(), dur: Math.round(dur), sr: sr2, score, note: '', peak: r3(Input.mic.peak), sent: 0 };
     const info = {
       app: 'keys-star', v: 1, id, kind: 'song', title: first.title || '', songId: first.id || '', date: d.toISOString(), score, peak: meta.peak,
-      rate: { orig: sr, saved: sr2 }, cfg: r.cfg, log, events,
+      clock: 'audio', rate: { orig: sr, saved: sr2 }, cfg: r.cfg, log, events,
       env: Object.assign(r.env0, { tuneEnd: Input.micInfo().tune, refEnd: Input.micInfo().ref, ua: navigator.userAgent, standalone: !!(navigator.standalone || matchMedia('(display-mode: standalone)').matches) }),
     };
     const buf = wav(data, sr2, info); meta.size = buf.byteLength;

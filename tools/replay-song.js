@@ -13,16 +13,39 @@ const f2 = x => x.toFixed(2);
 const rel = d => ({ 0: 'אותו תו', 12: 'אוקטבה מעל', '-12': 'אוקטבה מתחת', 24: '2 אוקטבות מעל', '-24': '2 אוקטבות מתחת', 7: 'קווינטה מעל', '-7': 'קווינטה מתחת', 19: 'אוקטבה+קווינטה מעל', '-19': 'אוקטבה+קווינטה מתחת', 1: 'חצי טון מעל', '-1': 'חצי טון מתחת', 2: 'טון מעל', '-2': 'טון מתחת', 5: 'קוורטה מעל', '-5': 'קוורטה מתחת' }[d] || `${d > 0 ? '+' : ''}${d} חצאי טונים`);
 
 // הרצה חוזרת של המנוע: דופק כל 5 אלפיות שנייה, ניתוח מלא כל דופק שני — כמו באפליקציה
-function replay(x, sr, expAt, opt, dbgWant) {
+function replay(x, sr, expAt, opt, dbgWant, slow = 2) {
   const det = new Detector(sr, opt), N = det.N, hop = Math.round(sr * 0.005), frame = new Float32Array(N), ev = [], dbg = [];
   if (dbgWant) det.dbg = o => dbg.push(o);
   let fi = 0;
   for (let p = hop; p <= x.length; p += hop) {
     const st = p - N; if (st >= 0) frame.set(x.subarray(st, p)); else { frame.fill(0); frame.set(x.subarray(0, p), -st); }
     const tMs = p / sr * 1000, exp = expAt(p / sr);
-    for (const e of det.process(frame, tMs, exp, hop, (fi++ % 2) !== 1)) ev.push({ t: e.t0 != null ? e.t0 / 1000 : p / sr, at: p / sr, on: e.type === 'on', m: e.midi, g: !!e.ghost });
+    for (const e of det.process(frame, tMs, exp, hop, (fi++ % slow) !== slow - 1)) ev.push({ t: e.t0 != null ? e.t0 / 1000 : p / sr, at: p / sr, on: e.type === 'on', m: e.midi, g: !!e.ghost });
   }
   return { ev, dbg, det };
+}
+
+// קפיצות עוצמה בהקלטה (תחילת הקשה), והתאמה ליניארית בינן לבין הזמנים שנרשמו באפליקציה
+function energyOnsets(x, sr) {
+  const blk = Math.round(sr * 0.005), E = [];
+  for (let i = 0; i + blk <= x.length; i += blk) { let s = 0; for (let j = i; j < i + blk; j++) s += x[j] * x[j]; E.push(Math.sqrt(s / blk)); }
+  const on = [];
+  for (let k = 10; k < E.length; k++) { let p = 0; for (let j = k - 10; j < k - 1; j++) p = Math.max(p, E[j]); if (E[k] > 0.04 && E[k] > 3 * p + 0.004 && (!on.length || k * 0.005 - on[on.length - 1] > 0.12)) on.push(k * 0.005); }
+  return on;
+}
+function alignFit(x, sr, live) {
+  const on = energyOnsets(x, sr), P = [];
+  for (const e of live) { if (!e.on || e.g) continue; let best = null; for (const o of on) if (o <= e.t + 0.1 && o >= e.t - 0.6 && (best == null || o > best)) best = o; if (best != null) P.push([e.t, e.t - best]); }
+  if (P.length < 8) return null;
+  let use = P, a = 0, b = 0;
+  for (let it = 0; it < 4; it++) {
+    const n = use.length, mx = use.reduce((s, p) => s + p[0], 0) / n, my = use.reduce((s, p) => s + p[1], 0) / n;
+    let sxy = 0, sxx = 0; for (const [t, d] of use) { sxy += (t - mx) * (d - my); sxx += (t - mx) * (t - mx); }
+    b = sxx ? sxy / sxx : 0; a = my - b * mx;
+    const res = P.map(([t, d]) => Math.abs(d - (a + b * t))).sort((p, q) => p - q), lim = Math.max(0.02, 2.5 * res[res.length >> 1]);
+    use = P.filter(([t, d]) => Math.abs(d - (a + b * t)) <= lim);
+  }
+  return { a, b, n: use.length };
 }
 
 function one(file) {
@@ -32,7 +55,18 @@ function one(file) {
   const sr = (info.rate && info.rate.orig) || sr0, k = sr / sr0;
   let x = x0;
   if (k !== 1) { x = new Float32Array(Math.floor(x0.length * k)); for (let i = 0; i < x.length; i++) { const p = i / k, a = Math.floor(p), f = p - a; x[i] = (x0[a] || 0) * (1 - f) + (x0[a + 1] || 0) * f; } }
-  const dur = x.length / sr, log = info.log || [], live = info.events || [];
+  const dur = x.length / sr;
+  let log = info.log || [], live = info.events || [];
+  // יישור שעונים: בהקלטות ישנות הזמנים נמדדו בשעון המערכת, והוא "זוחל" מול שעון ההקלטה (באנדרואיד: כ-0.2 שנייה בשתי דקות).
+  // מתאימים קו ישר בין רגעי ההקשה שהאפליקציה זיהתה לבין קפיצות העוצמה בהקלטה, ומתקנים את כל הזמנים לפיו.
+  {
+    const fit = alignFit(x, sr, live);
+    if (fit) {
+      const map = t => Math.round((t - (fit.a + fit.b * t)) * 1000) / 1000;
+      log = log.map(o => Object.assign({}, o, { t: map(o.t) })); live = live.map(e => Object.assign({}, e, { t: map(e.t) }));
+      console.log(`  יישור שעונים: הפרש ${f2(fit.a)}s בהתחלה, ${f2(fit.a + fit.b * dur)}s בסוף (${fit.n} הקשות)`);
+    }
+  }
   console.log(`\n=== ${path.basename(file)} · ${info.title || ''} · ${f2(dur)} שניות · ${info.env && info.env.ua ? (/iPad|iPhone/.test(info.env.ua) ? 'iOS' : /Android/.test(info.env.ua) ? 'Android' : 'מחשב') : ''} · עוצמה מרבית ${info.peak}`);
   const starts = log.filter(o => o.k === 'start' || o.k === 'snap');
   for (const s of starts) console.log(`  ${f2(s.t)}s ${s.k === 'snap' ? 'הקלטה התחילה באמצע' : 'התחלה'}: מצב ${s.mode}, קצב ${Math.round(s.tempo * 100)}%, יד ${s.arr}, תיבות ${s.range.join('–')}`);
@@ -49,7 +83,7 @@ function one(file) {
   const lv = all.map(n => n.level).sort((p, q) => p - q), typ = lv.length ? lv[Math.floor(lv.length * 0.7)] : 0;
   const ref = all.filter(n => n.level >= 0.5 * typ);
   const refNear = (t, a = 0.12, b = 0.2) => { const s = ref.filter(n => n.t >= t - a && n.t <= t + b); return s.length ? s : all.filter(n => n.t >= t - a && n.t <= t + b); };
-  const R = replay(x, sr, expAt, Object.assign({ tune: (info.cfg && info.cfg.tune) || 0, ref: (info.cfg && info.cfg.ref) || 0 }, OPT), verbose);
+  const R = replay(x, sr, expAt, Object.assign({ tune: (info.cfg && info.cfg.tune) || 0, ref: (info.cfg && info.cfg.ref) || 0 }, OPT), verbose, OPT.slow || (info.env && info.env.slowEvery) || 2);
 
   // כל "טעות": מוצאים את ההקשה שגרמה לה, ומה נוגן באמת באותו רגע
   const stat = { falseWrong: 0, realWrong: 0, phantom: 0, unclear: 0, rel: {} }, rows = [];
@@ -78,12 +112,17 @@ function one(file) {
   }
   // במצב לימוד: תווים שנוגנו אבל המשחק המשיך לחכות להם (לא שמע)
   const waits = log.filter(o => o.k === 'wait');
-  let deaf = 0;
+  let deaf = 0; const deafAt = [];
   for (const wt of waits) {
     const hit = log.find(o => o.k === 'hit' && o.m === wt.m && o.t >= wt.t);
     const until = hit ? hit.t : dur;
-    const heard = ref.filter(n => n.t > wt.t + 0.05 && n.t < until - 0.3 && n.notes.includes(wt.m));
-    if (heard.length) { deaf++; console.log(`  ⏳ ${f2(wt.t)}s חיכה ל-${nm(wt.m)} ${hit ? `עד ${f2(hit.t)}s` : 'עד הסוף'} — אבל נוגן כבר ב-${heard.map(n => f2(n.t)).join(', ')}`); }
+    const heard = ref.filter(n => n.t > wt.t - 0.1 && n.t < until - 0.4 && n.notes.includes(wt.m));
+    if (heard.length) { deaf++; deafAt.push([heard[0].t, wt.m, until]); const fixed = R.ev.some(r => r.on && !r.g && r.m === wt.m && r.t >= heard[0].t - 0.1 && r.t <= heard[0].t + 0.3); if (fixed) stat.fixedDeaf = (stat.fixedDeaf || 0) + 1;
+      console.log(`  ⏳ ${f2(wt.t)}s חיכה ל-${nm(wt.m)} ${hit ? `עד ${f2(hit.t)}s` : 'עד הסוף'} — אבל נוגן כבר ב-${heard.map(n => `${f2(n.t)}(${n.notes.map(nm).join('+')} ${n.level.toFixed(2)})`).join(', ')}${fixed ? ' · ✓ המנוע הנוכחי כבר שומע אותו' : ' · ✗ גם המנוע הנוכחי לא'}`); }
+  }
+  if (verbose) for (const [t, m, until] of deafAt) {
+    console.log(`  🔎 ${nm(m)} @${f2(t)}: הרצה חוזרת ${R.ev.filter(r => r.on && r.m === m && r.t >= t - 0.1 && r.t <= until).map(r => f2(r.t) + (r.g ? 'g' : '')).join(' ') || '—'}`);
+    for (const d of R.dbg.filter(d => d.n === m && d.t / 1000 >= t - 0.05 && d.t / 1000 <= t + 0.5).slice(0, 12)) console.log('      ', JSON.stringify(d, (k, v) => (typeof v === 'number' ? Math.round(v * 1000) / 1000 : v)));
   }
   const rw = R.ev.filter(e => e.on && !e.g);
   console.log(`  סיכום: ${stat.falseWrong} טעויות שווא · ${stat.realWrong} טעויות אמיתיות · ${stat.phantom} רפאים · ${stat.unclear} לא ברורות · ${deaf} תווים שלא נשמעו`);

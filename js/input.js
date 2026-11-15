@@ -4,9 +4,9 @@ const Input = (() => {
   const held = new Map(); // midi -> {src, ghost}
   const on = fn => subs.add(fn);
   // t0 = רגע ההקשה האמיתי (בשעון performance.now), כשהוא ידוע
-  function emit(type, midi, src, ghost = false, t0) {
+  function emit(type, midi, src, ghost = false, t0, ta) {
     if (type === 'on') held.set(midi, { src, ghost }); else held.delete(midi);
-    for (const fn of subs) fn({ type, midi, src, ghost, t0 });
+    for (const fn of subs) fn({ type, midi, src, ghost, t0, ta });
   }
   const heldNotes = () => [...held].map(([midi, v]) => ({ midi, ...v }));
 
@@ -41,7 +41,7 @@ const Input = (() => {
 
   // ---- מיקרופון ---- (הזיהוי עצמו ב-detector.js)
   let an = null, td = null, det = null, stream = null, srcNode = null, timer = 0, expected = null;
-  let lastCtx = 0, slowEvery = 2, tickN = 0, procAvg = 0; // דופק כל 5 אלפיות שנייה; ניתוח מלא כל דופק שני
+  let lastCtx = 0, slowEvery = 2, lastFull = -1e9, procAvg = 0; // ניתוח מהיר לכל 5 אלפיות שנייה של צליל; ניתוח מלא כל 10 (במכשיר איטי: 20)
   const mic = { on: false, level: 0, peak: 0, notes: [], error: '', tune: 0 };
 
   async function startMic(testNode) {
@@ -56,10 +56,11 @@ const Input = (() => {
       }
     } catch (e) { mic.error = 'אין גישה למיקרופון'; return false; }
     det = new Detector(ac.sampleRate, { tune: CFG.tune || 0, ref: CFG.ref || 0 });
-    an = ac.createAnalyser(); an.fftSize = det.N; an.smoothingTimeConstant = 0;
+    // חלון כפול: כך אפשר לנתח גם את הקטעים שהגיעו בזמן שהטיימר איחר (מכשיר איטי) — כל 5 אלפיות שנייה של צליל נבדקות
+    an = ac.createAnalyser(); an.fftSize = det.N * 2; an.smoothingTimeConstant = 0;
     srcNode.connect(an);
-    td = new Float32Array(det.N);
-    mic.on = true; mic.error = ''; lastCtx = ac.currentTime; procAvg = 0; tickN = 0;
+    td = new Float32Array(det.N * 2);
+    mic.on = true; mic.error = ''; lastCtx = ac.currentTime; procAvg = 0; lastFull = -1e9;
     timer = setInterval(tick, 5);
     return true;
   }
@@ -79,13 +80,19 @@ const Input = (() => {
     lastCtx = ct;
     an.getFloatTimeDomainData(td);
     // המנוע עובד בשעון השמע (מדויק לדגימה); חותמות הזמן מומרות לשעון של המשחק
-    const off = p0 - ct * 1000;
-    // בין ניתוח מלא לניתוח מלא רץ רק המסלול המהיר (נקישות + תווים צפויים) — כדי להגיב תוך אלפיות שנייה
-    const fastOnly = (tickN++ % slowEvery) !== 0;
-    const evs = det.process(td, ct * 1000, expected, fresh, fastOnly);
-    if (det.peak > mic.peak) mic.peak = det.peak;
-    for (const e of evs) emit(e.type, e.midi, 'mic', !!e.ghost, e.t0 != null ? e.t0 + off : undefined);
-    if (fastOnly) return;
+    const off = p0 - ct * 1000, N = det.N, L = td.length, sr = ac.sampleRate, H = Math.round(sr * 0.005), fullMs = slowEvery * 5 - 0.5;
+    // הצליל החדש מנותח בפרוסות של 5 אלפיות שנייה, גם אם הטיימר התעורר באיחור — כדי שאף הקשה לא "תיפול בין הכיסאות"
+    let e = L - Math.min(fresh, N), didFull = false;
+    for (;;) {
+      const rem = L - e, step = rem > 1.5 * H ? H : rem; e += step;
+      const tMs = ct * 1000 - (L - e) / sr * 1000, full = tMs - lastFull >= fullMs;
+      if (full) { lastFull = tMs; didFull = true; }
+      const evs = det.process(td.subarray(e - N, e), tMs, expected, step, !full);
+      if (det.peak > mic.peak) mic.peak = det.peak;
+      for (const ev of evs) emit(ev.type, ev.midi, 'mic', !!ev.ghost, ev.t0 != null ? ev.t0 + off : undefined, ev.t0);
+      if (e >= L) break;
+    }
+    if (!didFull) return;
     mic.level = det.level; mic.notes = det.present; mic.tune = det.tune;
     // מכשיר איטי: ניתוח מלא כל 20 אלפיות שנייה במקום 10
     procAvg = procAvg * 0.95 + (performance.now() - p0) * 0.05;
@@ -115,17 +122,17 @@ const Input = (() => {
   function startRec(maxSec) {
     if (!mic.on || !srcNode) return null;
     const ac = Snd.ctx(), sp = ac.createScriptProcessor(4096, 1, 1), mute = ac.createGain(), chunks = [];
-    const max = Math.round(maxSec * ac.sampleRate); let n = 0, t0 = 0, done = false;
+    const max = Math.round(maxSec * ac.sampleRate); let n = 0, t0 = 0, t0a = 0, done = false;
     mute.gain.value = 0;
     sp.onaudioprocess = e => {
       if (done) return;
       const d = e.inputBuffer.getChannelData(0);
-      if (!t0) t0 = performance.now() - d.length / ac.sampleRate * 1000;
+      if (!t0) { t0 = performance.now() - d.length / ac.sampleRate * 1000; t0a = (ac.currentTime - d.length / ac.sampleRate) * 1000; }
       if (n < max) { chunks.push(new Float32Array(d)); n += d.length; }
     };
     srcNode.connect(sp); sp.connect(mute); mute.connect(ac.destination);
     return {
-      get t0() { return t0; }, get sec() { return n / ac.sampleRate; },
+      get t0() { return t0; }, get t0a() { return t0a; }, get sec() { return n / ac.sampleRate; },
       stop() {
         done = true; sp.onaudioprocess = null;
         try { srcNode && srcNode.disconnect(sp); sp.disconnect(); mute.disconnect(); } catch (err) { /* כבר מנותק */ }

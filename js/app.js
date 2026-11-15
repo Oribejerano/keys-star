@@ -512,7 +512,7 @@
   // ---------- עדכון אוטומטי ----------
   // דף שנשמר במטמון (או אפליקציה שהוצמדה למסך הבית) לא תמיד נטען מחדש לבד. בכל פתיחה, ובכל חזרה למסך,
   // בודקים אם יש גרסה חדשה באתר — ואם כן, טוענים אותה (רק כשלא באמצע שיר).
-  const BUILD = '20261115a';
+  const BUILD = '20261115b';
   async function checkUpdate() {
     try {
       const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;

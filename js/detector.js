@@ -37,6 +37,7 @@
     this.atkOn = f64(-1e9); this.rise0 = f64(-1e9); this.riseT = f64(-1e9); this.riseF0 = f64(-1e9); this.riseFT = f64(-1e9);
     this.dev = f32(); this.dLo = f32(); this.dHi = f32();
     // גלאי נקישות (בזמן, לא בתדר)
+    this.faintK = opt.faintK == null ? 0.12 : opt.faintK; this.farRel = opt.farRel || 19;
     this.blk = Math.max(64, Math.round(sr * 0.005)); this.blkE = new Float32Array(10); this.blkD = new Float32Array(10); this.atkK = opt.atkK || 1.5; this.guard = opt.guard == null ? 1 : opt.guard; this.blkI = 0; this.carry = 0;
     this.atk = new Float64Array(8).fill(-1e9); this.atkI = 0; this.attackT = -1e9;
     // מסלול מהיר: חלון קצר (כ-43 אלפיות שנייה) על התדרים שמעל 420Hz, רק לתווים שהמשחק מצפה להם
@@ -355,7 +356,9 @@
       for (let r = 0; r < REL.length; r++) {
         const m = n - REL[r]; if (m < LO) break;
         const exM = expected && expected.has(m);
-        const struck = (A1[m] > 0 && Math.abs(this.rise0[m] - r0) < 110) || (exM && pres[m] && A1[m] === 0 && Math.abs(this.riseF0[m] - r0) < 110);
+        // (תו צפוי לא נחשב הרמוניה של תו רחוק — שתי אוקטבות ומעלה — שהיסוד שלו חלש בהרבה ממנו: זה רעש, לא הקשה)
+        const faint = ex && !exM && REL[r] >= this.farRel && A1[m] < this.faintK * A1[n];
+        const struck = (A1[m] > 0 && !faint && Math.abs(this.rise0[m] - r0) < 110) || (exM && pres[m] && A1[m] === 0 && Math.abs(this.riseF0[m] - r0) < 110);
         // תו לא צפוי: אם תו נמוך ממנו מצלצל (או צפוי ונשמע) והעוצמה מתאימה להרמוניה שלו — זו הרמוניה, לא תו
         if (struck || (!ex && ((A1[n] <= 1.3 * Math.max(A1[m], env[1][m])) || (exM && (A1[m] > 0 || A[3][m] > 0))))) { low = m; break; }
       }
