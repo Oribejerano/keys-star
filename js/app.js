@@ -19,7 +19,7 @@
     if (name === 'chords') { ensureMic(); Chords.show(); } else Chords.hide();
     if (name === 'samples') Samples.show(); else Samples.hide();
     cancelAnimationFrame(setRaf);
-    if (name === 'home') renderHome();
+    if (name === 'home') { picks = null; renderHome(); }
     if (name === 'settings') renderSettings();
   }
   document.addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) { Snd.unlock(); go(b.dataset.go); } });
@@ -65,7 +65,7 @@
   const diff = lv => lv <= 2 ? ['easy', 'קל'] : lv === 3 ? ['mid', 'בינוני'] : ['hard', 'מאתגר'];
   function cardHtml(s) {
     const [k, t] = diff(s.level || 3);
-    return `<button class="card" data-song="${s.id}">${coverHtml(s)}<b dir="auto">${esc(s.title)}</b><small dir="auto">${esc(s.composer || '')}</small><div class="row"><span class="diff ${k}">${t}</span>${starHtml(starsOf(s.id))}</div></button>`;
+    return `<button class="card" data-song="${s.id}">${coverHtml(s)}<span class="qp" data-play="${s.id}" role="button" aria-label="לנגן עכשיו">▶</span><b dir="auto">${esc(s.title)}</b><small dir="auto">${esc(s.composer || '')}</small><div class="row"><span class="diff ${k}">${t}</span>${starHtml(starsOf(s.id))}</div></button>`;
   }
   // ---------- אתגר יומי: כל פעם אתגר אחר (סוג ושיר משתנים), ואחרי שמסיימים — מיד אתגר חדש ----------
   const CH_TYPES = ['stars', 'echo', 'learn', 'chords'];
@@ -74,7 +74,7 @@
   // מאגר לאתגרים ולהפתעות: בעיקר שירי ילדים, דיסני וסרטים, ישראלי וקלאסי; לפעמים גם פופ ורוק
   const KID = new Set(['hanukkah', 'known', 'israeli', 'disney', 'classic']);
   function pickPool(r, maxLv) {
-    const all = allSongs().filter(s => (s.level || 3) <= maxLv && s.cat !== 'mine'), kid = all.filter(s => KID.has(s.cat));
+    const all = allSongs().filter(s => (s.level || 3) <= maxLv && s.cat !== 'mine'), kid = all.filter(s => s.lib ? goodLib(s) : KID.has(s.cat));
     return kid.length >= 10 && r % 3 !== 0 ? kid : all;
   }
   function challenge() {
@@ -112,7 +112,17 @@
   }
   // לכל קטגוריה גדולה מציגים מבחר משתנה מדי יום (כדי לגלות שירים חדשים), ואפשר לפתוח את כולם
   const dayMix = list => { const d = Math.floor(Date.now() / 864e5); return list.slice().sort((x, y) => hash(x.id + d) - hash(y.id + d)); };
-  let catShow = 60;
+  let catShow = 60, picks = null;
+  const goodLib = s => s.composer === 'Disney Themes' || (s.cat === 'israeli' && /[א-ת]/.test(s.title) && !/\d/.test(s.title)); // מהחבילה: רק דיסני ושירים ישראליים
+  // "בשבילך": מבחר אקראי של שירים טובים — חצי מהשירים שנכתבו ידנית באפליקציה (הכי מדויקים), וחצי מהקטגוריות של ילדים, דיסני וישראלי
+  function pickSongs() {
+    const cap = lvCap() + 1, fresh = s => starsOf(s.id) < 3 && s.id !== D.last && (s.level || 3) <= cap;
+    const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+    const hand = shuffle(SONGS.filter(fresh)), lib = shuffle(Library.list.filter(s => fresh(s) && goodLib(s)));
+    const out = [], seen = new Set();
+    for (let i = 0; out.length < 8 && (i < hand.length || i < lib.length); i++) for (const s of [hand[i], lib[i]]) if (s && out.length < 8 && !seen.has(s.title)) { seen.add(s.title); out.push(s); }
+    return out;
+  }
   function renderHome() {
     renderStats();
     const h = new Date().getHours();
@@ -143,6 +153,10 @@
         const hs = songsAll.filter(s => s.cat === hol.cat);
         if (hs.length) html += `<section class="holiday ${hol.cat}"><div class="holhead"><span class="holic">${hol.icon}</span><div><b>${hol.title}</b><small>${hol.sub}</small></div></div><div class="grid">${hs.map(cardHtml).join('')}</div></section>`;
       }
+      if (catFilter === 'all') {
+        if (!picks) picks = pickSongs();
+        if (picks.length) html += `<div class="cat picks">🎁 שירים בשבילך <button class="chip mini" id="reshuffle">🔀 אחרים</button></div><div class="grid">${picks.map(cardHtml).join('')}</div>`;
+      }
     for (const cid of cats) {
       if (catFilter !== 'all' && catFilter !== cid) continue;
       if (catFilter === 'all' && hol && cid === hol.cat) continue;
@@ -166,6 +180,8 @@
       if (pool.length) { Snd.unlock(); Snd.chime(true); openSong(pool[Math.floor(Math.random() * pool.length)].id); }
       return;
     }
+    if (e.target.closest('#reshuffle')) { picks = null; Snd.unlock(); Snd.chime(true); renderHome(); return; }
+    const qp = e.target.closest('[data-play]'); if (qp) { quickPlay(qp.dataset.play); return; }
     if (e.target.closest('#catMore')) { catShow += 60; renderHome(); return; }
     const c = e.target.closest('[data-cat]'); if (c) { catFilter = c.dataset.cat; catShow = 60; renderHome(); $('scr-home').querySelector('.main').scrollTop = 0; return; }
     const s = e.target.closest('[data-song]'); if (s) { openSong(s.dataset.song); return; }
@@ -289,6 +305,11 @@
     document.querySelectorAll('#sgSpeed [data-tempo]').forEach(b => b.classList.toggle('sel', Math.abs(b.dataset.tempo - tempo) < 0.01));
     $('sgDelete').hidden = !D.mine.includes(curSong);
     go('song');
+  }
+  async function quickPlay(id) {
+    Snd.unlock(); goFull();
+    await openSong(id); if (!curSong || curSong.id !== id) return;
+    await ensureMic(); runSingle('wait');
   }
   $('sgArr').addEventListener('click', e => { const b = e.target.closest('[data-arr]'); if (b) { arr = b.dataset.arr; openSong(curSong.id); } });
   $('sgSpeed').addEventListener('click', e => { const b = e.target.closest('[data-tempo]'); if (!b) return; tempo = +b.dataset.tempo; document.querySelectorAll('#sgSpeed [data-tempo]').forEach(x => x.classList.toggle('sel', x === b)); });

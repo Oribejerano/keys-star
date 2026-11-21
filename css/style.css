@@ -351,3 +351,9 @@ input[type=range] { width: 100%; accent-color: var(--acc); height: 32px; }
 .holiday.hanukkah .holhead b { color: #fde68a; }
 .holiday .card { box-shadow: 0 4px 14px rgba(15, 23, 42, .18); }
 @media (max-width: 760px) { .holiday { padding: 10px 10px 12px; border-radius: 20px; } .holhead b { font-size: 19px; } .holic { width: 44px; height: 44px; font-size: 26px; } }
+/* כפתור ▶ על כל שיר: נכנסים ישר לנגינה */
+.card { position: relative; }
+.card .qp { position: absolute; top: 16px; inset-inline-start: 16px; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.92); color: #7c3aed; font-size: 17px; padding-inline-start: 3px; box-shadow: 0 3px 10px rgba(0,0,0,.18); z-index: 1; }
+.card .qp:active { transform: scale(.9); }
+.cat.picks { display: flex; align-items: center; gap: 10px; }
+.chip.mini { padding: 5px 12px; font-size: 14px; }
