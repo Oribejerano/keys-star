@@ -339,3 +339,15 @@ input[type=range] { width: 100%; accent-color: var(--acc); height: 32px; }
 .hud .icon.rec { color: #ef4444; font-size: 16px; }
 .hud .icon.rec.on { width: auto; padding: 0 12px; background: #ef4444; color: #fff; font-size: 15px; font-weight: 800; animation: recpulse 1.6s ease-in-out infinite; }
 @keyframes recpulse { 50% { opacity: .7; } }
+/* שירי חגים — החג הקרוב בראש העמוד */
+.holiday { margin: 8px 0 18px; padding: 14px 14px 16px; border-radius: 26px; background: linear-gradient(135deg, #dbeafe, #fef3c7); box-shadow: var(--shadow2); position: relative; overflow: hidden; }
+.holiday.hanukkah { background: linear-gradient(135deg, #1e3a8a, #2563eb 55%, #3b82f6); }
+.holiday.hanukkah::before { content: '✨'; position: absolute; top: 8px; left: 14px; font-size: 26px; opacity: .8; animation: bob 3s ease-in-out infinite; }
+.holhead { display: flex; align-items: center; gap: 12px; margin: 0 2px 12px; }
+.holic { font-size: 34px; width: 56px; height: 56px; display: grid; place-items: center; border-radius: 18px; background: rgba(255,255,255,.2); flex: none; }
+.holhead b { display: block; font-size: 22px; font-weight: 800; }
+.holhead small { font-size: 14px; opacity: .9; }
+.holiday.hanukkah .holhead { color: #fff; }
+.holiday.hanukkah .holhead b { color: #fde68a; }
+.holiday .card { box-shadow: 0 4px 14px rgba(15, 23, 42, .18); }
+@media (max-width: 760px) { .holiday { padding: 10px 10px 12px; border-radius: 20px; } .holhead b { font-size: 19px; } .holic { width: 44px; height: 44px; font-size: 26px; } }

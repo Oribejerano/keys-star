@@ -25,7 +25,68 @@ const SONGS = (() => {
   const sn = 'G4:1.5 A4:.5 G4 | E4:3', sn2 = 'A4:2 A4 | C5:1.5 B4:.5 A4 | G4:1.5 A4:.5 G4 | E4:3';
   const odeA = 'E4 E4 F4 G4 | G4 F4 E4 D4 | C4 C4 D4 E4';
 
+  // ---------- חנוכה (התווים לפי דפי תווים מוכרים: תו ישראלי, ויקיפדיה ואוספי ABC) ----------
+  const nlA = 'E4:.5 F4:.5 G4:.5 A4:.5 G4 E4 | F4:.5 E4:.5 D4:.5 F4:.5 E4:2 | E4:.5 F4:.5 G4:.5 A4:.5 G4 E4 | F4 E4:.5 D4:.5 C4:2';
+  const nlB = 'E4 A4:.5 B4:.5 C5 C5 | B4 B4 A4:2 | G4 G4:.5 A4:.5 G4 E4 | F4 E4:.5 D4:.5 C4:2';
+  const bcA = 'A4:1.5 G4:.5 A4 C5 | B4 C5 A4 R | A4:1.5 G4:.5 A4 C5 | B4 C5 A4 R | D5:1.5 C5:.5 D5:1.5 C5:.5 | A4 C5 D5 R | D5:1.5 C5:.5 D5:1.5 C5:.5 | A4 C5 D5 R';
+  const bcB = 'E5:.5 D5:.5 C5 C5 A4 | A4 G4 A4 R | E5:.5 D5:.5 C5:2 E5 | D5 C5:.5 B4:.5 A4:2';
+  const chA = 'G4 E4 G4:2 | G4 E4 G4:2 | E4 G4 C5 B4 | A4:4';
+  const svA = 'A4:.5 A4:.5 B4 C5:.5 C5:.5 B4 | E5:.5 E5:.5 D5:.25 C5:.25 B4:.25 A4:.25 C5:.5 C5:.5 B4 | A4:.5 A4:.5 B4 C5:.5 C5:.5 D5 | E5:.5 E5:.5 E5:.5 E4:.5 A4:.5 A4:.5 A4';
+  const svB = 'D5:.5 D5:.5 D5:.5 F5:.5 E5:.5 E5:.5 C5:.25 B4:.25 A4:.5 | G#4:.5 G#4:.5 E4:.5 G#4:.5 A4:.5 B4:.5 C5:.25 B4:.25 A4:.5';
+  const kdA = 'E4:1.5 D4:.5 E4 R | E4:1.5 D4:.5 E4 R:.5 E4:.5 | E4 A4 E4 F#4 | G4:1.5 F#4:.5 E4 R';
+  const kdB = 'E4 B4 A4 A4 | E4 D4 G4:2 | E4 B4 A4 E4:.5 F#4:.5 | G4 F#4 E4:2 | A4 D4 D4 D4 | D4 C#4:.5 D4:.5 E4:2 | G4 E4 D4 E4:.5 F#4:.5 | G4 F#4 E4:2';
+  const clyA = 'G4:.5 G4:.5 A4:.5 B4:.5 G4 R:.5 D4:.5', clyB = 'C5:.75 B4:.25 C5:.5 D5:.5 B4 R:.5 B4:.5 | A4:.75 G4:.25 A4:.5 B4:.5 G4 R:.5 G4:.5';
+  const clyC = 'G4:.5 F#4:.25 E4:.25 D4:.5 G4:.5 G4 R:.5 G4:.5 | G4:.5 F#4:.25 E4:.25 D4:.5 B4:.5 G4 R:.5 G4:.5';
+  const hnA = 'B4 B4:.75 B4:.25 B4 B4 | B4:.5 A4:.5 G4:.5 A4:.5 B4 G4:.75 G4:.25 | D5 D5:.75 D5:.25 D5 D5:.75 D5:.25 | D5:.5 C5:.5 B4:.5 C5:.5 D5 B4';
+  const hnB = 'D5:.5 G5:.5 B4:.5 C5:.5 D5 R:.5 D5:.5 | D5:.5 G5:.5 B4:.5 C5:.5 D5 R:.5 D5:.5 | E5:.5 D5:.5 C5:.5 B4:.5 A4 D5 | B4:.5 B4:.5 A4:.5 A4:.5 G4:2';
+  const hnC = 'B4 B4 B4 B4 | B4:.5 A4:.5 G4:.5 A4:.5 B4 G4 | D5 D5 D5 D5 | D5:.5 C5:.5 B4:.5 C5:.5 D5 B4 | D5:.5 G5:.5 B4:.5 C5:.5 D5:2 | D5:.5 G5:.5 B4:.5 C5:.5 D5:2 | E5:.5 D5:.5 C5:.5 B4:.5 A4 D5 | B4 A4 G4:2';
+  const hvA = 'C5 A4:.75 Bb4:.25 C5 F4 | G4:.25 A4:.25 Bb4:.25 C5:.25 Bb4:.5 A4:.5 G4:2 | A4:.25 Bb4:.25 C5:.25 D5:.25 C5:.5 C5:.5 F5 C5 | Bb4:.5 A4:.5 G4:.75 F4:.25 F4:2';
+  const hvB = 'A4:.25 G4:.25 A4:.25 Bb4:.25 A4:.5 A4:.5 G4 F4 | Bb4:.5 A4:.5 G4:.5 F4:.5 E4:2 | F4:.25 E4:.25 F4:.25 G4:.25 F4:.5 F4:.5 D5 B4 | C5:.5 D5:.25 C5:.25 B4:.5 B4:.5 C5:2';
+  const mzA = 'C4 G3 C4 F4 | E4 D4 C4:1.5 G4:.5 | G4 A4 D4 E4:.5 F4:.5';
+  const mzB = 'E4:1.5 F4:.5 G4:1.5 A4:.5 | D4:1.5 E4:.5 F4:2 | E4 C4 A4 G4:.5 F4:.5';
+  const ymA = 'E4:.5 | E4:.5 E4:.5 E4:.5 E4:.5 | A4 E4:.5 E4:.5 | E4 D4:.5 C4:.5 | D4 C4:.5 E4:.5 | E4:.5 E4:.5 E4:.5 E4:.5 | A4 E4:.5 E4:.5 | E4 D4:.5 C4:.5 | D4 C4';
+  const ymB = 'C4:.5 D4:.5 E4:.5 D4:.5 | C4 C4 | D4 C4:.5 B3:.5';
+  const ymC = 'E4 E4:.5 E4:.5 | F4 E4:.5 D4:.5';
+  const drA = 'C4 C4 D4 D4 | E4 C4:2 E4 | G4 G4 F4 E4 | D4:3 D4 | D4 D4 D4 E4 | F4 D4:2 D4 | G4 F4 E4 D4';
+  const drB = 'G4 E4 G4 E4 | G4 E4:2 E4 | G4 G4 F4 E4 | D4:3 D4 | F4 D4 F4 D4 | F4 D4:2 D4 | G4 F4 E4 D4';
+
   return [
+    // ---------- 🕎 חנוכה ----------
+    { id: 'h_sevivon', title: 'סביבון סוב סוב סוב', composer: 'לוין קיפניס · עממי', cat: 'hanukkah', level: 2, bpm: 100,
+      rh: `${svA} | ${svB} | ${svB.replace(/ \| [^|]*$/, '')} | G#4:.5 G#4:.5 E4:.5 G#4:.5 A4:.5 A4:.5 A4`,
+      chords: 'Am:1 E:1 Am:1 E:1 Am:1 Dm:1 Am:1 E:1 Am:1 E:1 Am:1 Dm:1 E:2 Am:2 Dm:2 Am:2 E:2 Am:2 Dm:2 Am:2 E:2 Am:2' },
+    { id: 'h_chanukah', title: 'חנוכה חנוכה חג יפה כל כך', composer: 'לוין קיפניס · עממי', cat: 'hanukkah', level: 1, bpm: 112,
+      rh: `${chA} | F4 D4 F4:2 | F4 D4 F4:2 | D4 F4 B4 A4 | G4:4 | ${chA} | B4 B4 B4:2 | B4 B4 B4:2 | B4 G4 A4 B4 | C5:4`,
+      chords: 'C C C F G7 G7 G7 C C C C F G7 G7 G7 C' },
+    { id: 'h_nerli', title: 'נר לי דקיק', composer: 'לוין קיפניס · דניאל סמבורסקי', cat: 'hanukkah', level: 1, bpm: 104,
+      rh: `${nlA} | ${nlB} | ${nlB}`,
+      chords: rep('C G7:2 C:2', 2) + ' ' + rep('Am E7:2 F:2 C G7:2 C:2', 2) },
+    { id: 'h_banu', title: 'באנו חושך לגרש', composer: 'שרה לוי-תנאי · עמנואל עמירן', cat: 'hanukkah', level: 2, bpm: 108,
+      rh: `${bcA} | ${bcB} | ${bcB}`,
+      chords: 'Am G:2 Am:2 Am G:2 Am:2 Dm Am:2 Dm:2 Dm Am:2 Dm:2 ' + rep('Am Am:1 G:1 Am:2 Am G:2 Am:2', 2) },
+    { id: 'h_kad', title: 'כד קטן', composer: 'אהרון אשמן · יואל ולבה', cat: 'hanukkah', level: 2, bpm: 100,
+      rh: `${kdA} | ${kdA} | ${kdB}`,
+      chords: rep('Em Em Em:2 Am:2 B7:2 Em:2', 2) + ' Em:2 Am:2 D:2 G:2 Em:2 Am:2 B7:2 Em:2 D D:2 Em:2 Em:2 D:2 B7:2 Em:2' },
+    { id: 'h_chanukiya', title: 'חנוכייה לי יש', composer: 'שרה גלוזמן · ניסן כהן מלמד', cat: 'hanukkah', level: 2, bpm: 104, pickup: 0.5,
+      rh: `D4:.5 | ${clyA} | ${clyA.replace('D4:.5', 'G4:.5')} | ${clyB} | ${clyB} | ${clyC} | G4:.5 F#4:.25 E4:.25 D4:.5 G4:.5 G4 R:.5 G4:.5 | G4:.5 F#4:.25 E4:.25 D4:.5 B4:.5 G4:2`,
+      chords: 'G:1 D7:1 G:2 G:1 D7:1 G:2 C:2 G:2 D7:2 G:2 C:2 G:2 D7:2 G:2 ' + rep('G:1 D7:1 G:2', 4) },
+    { id: 'h_hanerot', title: 'הנרות הללו', composer: 'מן המקורות · עממי', cat: 'hanukkah', level: 3, bpm: 100, pickup: 0.5,
+      rh: `D4:.5 | ${hnA} | ${hnB} | ${hnC}`,
+      chords: 'G D7:2 G:2 G D7:2 G:2 G G C:2 D7:2 G:1 D7:1 G:2 G D7:2 G:2 G D7:2 G:2 G G C:2 D7:2 G:1 D7:1 G:2' },
+    { id: 'h_maoz', title: 'מעוז צור', composer: 'פיוט · לחן מסורתי', cat: 'hanukkah', level: 3, bpm: 96,
+      rh: `${mzA} | E4 D4 C4:1.5 C4:.5 | ${mzA} | E4 D4 C4:2 | G4:1.5 G4:.5 A4 B4 | C5:2 G4:2 | C5 B4 A4 G4 | G4:.5 F4:.5 E4:.5 F4:.5 D4:2 | ${mzB} | E4 F4 G4:2 | ${mzB} | E4 D4 C4:2`,
+      chords: rep('C:2 F:2 C:1 G:1 C:2 C:1 F:1 G:2 C:1 G:1 C:2', 2) + ' C:2 G:2 C C:1 G:1 F:1 C:1 C:1 F:1 G:2 C G:2 F:2 C:2 F:2 C:2 G:2 C G:2 F:2 C:2 F:2 C:1 G:1 C:2',
+      lyrics: [[0, 'מעוז צור ישועתי'], [16, 'תיכון בית תפילתי'], [32, 'לעת תכין מטבח'], [48, 'אז אגמור בשיר מזמור']] },
+    { id: 'h_yemei', title: 'ימי החנוכה', composer: 'אברהם אברונין · עממי', cat: 'hanukkah', level: 2, bpm: 120, beats: 2, pickup: 0.5,
+      rh: `${ymA} | ${ymB} | C4:2 | ${ymB} | A3 A3:.5 C4:.5 | E4 E4 | R A3:.5 C4:.5 | E4 E4 | R A3 | ${ymC} | E4:2 | R:2 | ${ymC} | E4:.5 E4:.5 E4:.5 E4:.5 | F4 E4:.5 D4:.5 | C4 C4:.5 C4:.5 | D4 C4:.5 D4:.5 | E4:2 | R:2 | ${ymC} | E4:.5 E4:.5 E4:.5 E4:.5 | F4 E4:.5 D4:.5 | C4 C4:.5 C4:.5 | D4 C4:.5 B3:.5 | A3:2`,
+      chords: 'Am Am Dm:1 Am:1 Dm:1 Am:1 Am Am Dm:1 Am:1 Dm:1 Am:1 C C G C C C G Am Am Am Am Am Am Dm E E Am Dm Am Dm C G Am Am Am Dm Am Dm C Dm:1 E:1 Am' },
+    { id: 'h_dreidel', title: 'I Have a Little Dreidel', composer: 'סביבון באנגלית · עממי', cat: 'hanukkah', level: 1, bpm: 120, pickup: 1,
+      rh: `G4 | ${drA} | C4:3 E4 | ${drB} | C4:3`,
+      chords: 'C:2 G7:2 C Em:2 A7:2 Dm Dm:2 A7:2 Dm G7 C C C Em:2 A7:2 Dm Dm Dm:2 G7:2 G7 C' },
+    { id: 'h_narima', title: 'הבה נרימה', composer: 'לוין קיפניס · הנדל', cat: 'hanukkah', level: 4, bpm: 96,
+      rh: `${hvA} | ${hvB} | ${hvA}`,
+      chords: 'F C7 F:2 Dm:2 Gm:1 C7:1 F:2 F:2 A7:1 Dm:1 Gm:2 A7:2 Dm:2 G7:2 C:1 G7:1 C:2 F C7 F:2 Dm:2 Gm:1 C7:1 F:2' },
+
     // ---------- חימום ושירים מוכרים ----------
     { id: 'twinkle', title: 'כוכב קטן', composer: 'עממי (מוצרט עיבד)', cat: 'known', level: 1, bpm: 100,
       rh: 'C4 C4 G4 G4 | A4 A4 G4:2 | F4 F4 E4 E4 | D4 D4 C4:2 | G4 G4 F4 F4 | E4 E4 D4:2 | G4 G4 F4 F4 | E4 E4 D4:2 | C4 C4 G4 G4 | A4 A4 G4:2 | F4 F4 E4 E4 | D4 D4 C4:2',
@@ -109,5 +170,5 @@ const SONGS = (() => {
   ];
 })();
 
-const CATS = [['mine', '📂 השירים שלי'], ['web', '🌐 מהאינטרנט'], ['pop', '🎧 פופ ולהיטים'], ['ilnew', '🎤 ישראלי חדש'], ['disney', '🎬 דיסני וסרטים'], ['known', '🎈 שירים מוכרים'],
+const CATS = [['hanukkah', '🕎 חנוכה'], ['mine', '📂 השירים שלי'], ['web', '🌐 מהאינטרנט'], ['pop', '🎧 פופ ולהיטים'], ['ilnew', '🎤 ישראלי חדש'], ['disney', '🎬 דיסני וסרטים'], ['known', '🎈 שירים מוכרים'],
   ['israeli', '🇮🇱 ישראלי'], ['rock', '🎸 רוק קלאסי'], ['classic', '🎻 קלאסי']];

@@ -49,13 +49,13 @@
 
   // ---------- בית ----------
   // כל קטגוריה מקבלת צבע וסמל משלה — כך קל לזהות שירים במבט
-  const LOOK = { known: ['#fbbf24', '#fb7185', '🎈'], israeli: ['#38bdf8', '#34d399', '🌟'], classic: ['#a78bfa', '#6366f1', '🎻'], disney: ['#60a5fa', '#c084fc', '🏰'],
+  const LOOK = { hanukkah: ['#3b82f6', '#fbbf24', '🕎'], known: ['#fbbf24', '#fb7185', '🎈'], israeli: ['#38bdf8', '#34d399', '🌟'], classic: ['#a78bfa', '#6366f1', '🎻'], disney: ['#60a5fa', '#c084fc', '🏰'],
     ilnew: ['#f472b6', '#a78bfa', '🎤'], pop: ['#f472b6', '#38bdf8', '🎧'], rock: ['#fb923c', '#ef4444', '🎸'], web: ['#38bdf8', '#818cf8', '🌐'], mine: ['#f472b6', '#fb923c', '💖'] };
-  const ORDER = ['known', 'israeli', 'disney', 'ilnew', 'pop', 'rock', 'classic', 'web', 'mine'];
+  const ORDER = ['hanukkah', 'known', 'israeli', 'disney', 'ilnew', 'pop', 'rock', 'classic', 'web', 'mine'];
   const catName = id => ((CATS.find(c => c[0] === id) || [])[1] || '').replace(/^\S+\s/, '');
   // לכל שיר תמונה וצבעים משלו (לשירים המובנים — תמונה שמתאימה לשיר; לשירים שנוספו — לפי השם)
   const PIC = { twinkle: '⭐', jacob: '😴', yonatan: '🌳', birthday: '🎂', jingle: '🔔', hatikvah: '🇮🇱', london: '🌉', yankee: '🎩', saints: '🎺', susanna: '🪕',
-    grace: '🕊️', silent: '🎄', bells: '🛎️', ode: '🎼', cancan: '💃', kleine: '🌃', mountain: '⛰️', lullaby: '🌙', minuet: '👑', greensleeves: '🍃', canon: '🎻', elise: '💌', turkish: '🎪' };
+    grace: '🕊️', h_sevivon: '🌀', h_chanukah: '🕎', h_nerli: '🕯️', h_banu: '🔦', h_kad: '🏺', h_chanukiya: '🕎', h_hanerot: '🕯️', h_maoz: '🏰', h_yemei: '🍩', h_dreidel: '🌀', h_narima: '🔥', silent: '🎄', bells: '🛎️', ode: '🎼', cancan: '💃', kleine: '🌃', mountain: '⛰️', lullaby: '🌙', minuet: '👑', greensleeves: '🍃', canon: '🎻', elise: '💌', turkish: '🎪' };
   const PICS = ['🎵', '🎶', '🦄', '🌈', '🎀', '🦋', '🍭', '🌸', '🐬', '🍓', '🎠', '🐱', '🌻', '🪐', '🧁', '🐼'];
   const GRADS = [['#fbbf24', '#fb7185'], ['#38bdf8', '#34d399'], ['#a78bfa', '#6366f1'], ['#f472b6', '#a78bfa'], ['#60a5fa', '#c084fc'], ['#fb923c', '#f43f5e'],
     ['#34d399', '#22d3ee'], ['#f9a8d4', '#fcd34d'], ['#818cf8', '#ec4899'], ['#2dd4bf', '#818cf8']];
@@ -72,7 +72,7 @@
   const lvCap = () => Math.min(5, 2 + Math.floor(level() / 2));
   const mix = x => { x ^= x >>> 16; x = Math.imul(x, 0x45d9f3b); x ^= x >>> 16; x = Math.imul(x, 0x45d9f3b); x ^= x >>> 16; return x >>> 0; };
   // מאגר לאתגרים ולהפתעות: בעיקר שירי ילדים, דיסני וסרטים, ישראלי וקלאסי; לפעמים גם פופ ורוק
-  const KID = new Set(['known', 'israeli', 'disney', 'classic']);
+  const KID = new Set(['hanukkah', 'known', 'israeli', 'disney', 'classic']);
   function pickPool(r, maxLv) {
     const all = allSongs().filter(s => (s.level || 3) <= maxLv && s.cat !== 'mine'), kid = all.filter(s => KID.has(s.cat));
     return kid.length >= 10 && r % 3 !== 0 ? kid : all;
@@ -94,6 +94,21 @@
     const [ic, b, sub] = c.type === 'stars' ? ['🎮', `3 כוכבים במשחק: ${t}`, 'מנגנים בקצב, בלי לפספס'] : c.type === 'learn' ? ['🐢', `ללמוד שיר: ${t}`, '2 כוכבים במצב לימוד']
       : c.type === 'echo' ? ['🦜', `לתפוס את המנגינה: ${t}`, '2 כוכבים בתופסת מנגינה'] : ['🎼', `${c.need} אקורדים בדקה אחת`, 'באתגר האקורדים'];
     return `<button class="daily" ${c.song ? `data-song="${c.song.id}"` : 'data-go="chords"'}><i>${ic}</i><div><b dir="auto">האתגר: ${b}</b><span>${sub} · <u data-skip="1">🔀 אתגר אחר</u></span></div><span class="go">▶</span></button>`;
+  }
+  // ---------- חגים: לכל חג תאריכים (ערב החג עד סופו); החג מופיע בראש הבית כחודש וחצי לפניו ועד שנגמר ----------
+  const HOLIDAYS = [
+    { cat: 'hanukkah', icon: '🕎', name: 'חנוכה', dates: [['2026-12-04', '2026-12-12'], ['2027-12-24', '2028-01-01'], ['2028-12-12', '2028-12-20']] },
+  ];
+  function holidayNow() {
+    const day = d => Math.round(Date.parse(d) / 864e5), today = Math.floor((Date.now() - new Date().getTimezoneOffset() * 6e4) / 864e5);
+    for (const h of HOLIDAYS) for (const [a, b] of h.dates) {
+      const s = day(a), e = day(b);
+      if (today > e || today < s - 45) continue;
+      const left = s - today;
+      const sub = left > 1 ? `עוד ${left} ימים ל${h.name} — בואי נתאמן על שירי החג!` : left === 1 ? `מחר בערב ${h.name}! 🎉` : left === 0 ? `הערב מדליקים נר ראשון! 🕯️` : `חג ${h.name} שמח! היום נר ${Math.min(8, 1 - left)} 🕯️`;
+      return { cat: h.cat, icon: h.icon, title: `שירי ${h.name}`, sub };
+    }
+    return null;
   }
   // לכל קטגוריה גדולה מציגים מבחר משתנה מדי יום (כדי לגלות שירים חדשים), ואפשר לפתוח את כולם
   const dayMix = list => { const d = Math.floor(Date.now() / 864e5); return list.slice().sort((x, y) => hash(x.id + d) - hash(y.id + d)); };
@@ -121,8 +136,16 @@
       const q = query.toLowerCase(), found = songsAll.filter(s => (s.title + ' ' + (s.composer || '')).toLowerCase().includes(q));
       html = found.length ? `<div class="cat">🎵 באפליקציה (${found.length})</div><div class="grid">${found.slice(0, 60).map(cardHtml).join('')}</div>` + (found.length > 60 ? '<div class="sub">מוצגים 60 הראשונים — אפשר לדייק את החיפוש</div>' : '') : '';
       html += '<div class="cat">🌐 מהאינטרנט</div><div id="webRes" class="weblist"></div>';
-    } else for (const cid of cats) {
+    } else {
+      // שירי חגים: החג הקרוב מקבל מקום של כבוד בראש העמוד
+      const hol = holidayNow();
+      if (catFilter === 'all' && hol) {
+        const hs = songsAll.filter(s => s.cat === hol.cat);
+        if (hs.length) html += `<section class="holiday ${hol.cat}"><div class="holhead"><span class="holic">${hol.icon}</span><div><b>${hol.title}</b><small>${hol.sub}</small></div></div><div class="grid">${hs.map(cardHtml).join('')}</div></section>`;
+      }
+    for (const cid of cats) {
       if (catFilter !== 'all' && catFilter !== cid) continue;
+      if (catFilter === 'all' && hol && cid === hol.cat) continue;
       let songs = songsAll.filter(s => s.cat === cid);
       const big = songs.length > 12, total = songs.length;
       if (big) songs = dayMix(songs);
@@ -131,6 +154,7 @@
       if (total > lim) html += catFilter === 'all' ? `<button class="card add more" data-cat="${cid}"><i>➕</i><b>לכל ${total.toLocaleString('he-IL')} השירים</b></button>` : '<button class="card add more" id="catMore"><i>⬇️</i><b>עוד שירים</b></button>';
       if (cid === 'mine') html += '<button class="card add" data-rec="1"><i>⏺</i><b>להקליט שיר</b><small>מנגנים, והאפליקציה זוכרת</small></button><button class="card add" data-midi="1"><i>📂</i><b>קובץ MIDI</b><small>להורים: הוספת שיר מקובץ</small></button>';
       html += '</div>';
+    }
     }
     $('songList').innerHTML = html;
     if (query) webSearch(query);
